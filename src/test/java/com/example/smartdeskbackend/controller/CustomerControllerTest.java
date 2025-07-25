@@ -1,0 +1,4 @@
+package com.example.smartdeskbackend.controller;
+
+public class CustomerControllerTest {
+}
