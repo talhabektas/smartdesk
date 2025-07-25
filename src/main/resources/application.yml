@@ -1,0 +1,316 @@
+# SmartDesk CRM Backend Configuration
+# Ana yapılandırma dosyası
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+  error:
+    include-message: always
+    include-binding-errors: always
+
+spring:
+  application:
+    name: smartdesk-backend
+
+  profiles:
+    active: dev
+
+  # Database Configuration
+  datasource:
+    url: jdbc:mysql://localhost:3306/smartdesk?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Europe/Istanbul
+    username: root
+    password: 61611616
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      connection-timeout: 20000
+      leak-detection-threshold: 60000
+
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: update
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          batch_size: 20
+          order_inserts: true
+          order_updates: true
+        cache:
+          use_second_level_cache: false
+          use_query_cache: false
+        generate_statistics: false
+    defer-datasource-initialization: true
+
+  # SQL Initialization
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:data.sql
+      continue-on-error: false
+
+  # Mail Configuration
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: your-email@gmail.com
+    password: your-app-password
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+          timeout: 8000
+          connectiontimeout: 8000
+          writetimeout: 8000
+
+  # File Upload Configuration
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+      file-size-threshold: 2KB
+
+  # Jackson Configuration
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: Europe/Istanbul
+    default-property-inclusion: NON_NULL
+
+  # Cache Configuration
+  cache:
+    type: simple
+    cache-names:
+      - users
+      - companies
+      - tickets
+      - departments
+
+# JWT Configuration
+jwt:
+  secret: SmartDeskCRMSecretKeyForJWTTokenGenerationAndValidation2024SuperSecure
+  expiration: 86400000 # 24 hours
+  refresh-expiration: 604800000 # 7 days
+
+# CORS Configuration
+cors:
+  allowed-origins:
+    - http://localhost:3000
+    - http://localhost:3001
+    - http://localhost:8080
+    - http://localhost:8081
+  allowed-methods:
+    - GET
+    - POST
+    - PUT
+    - DELETE
+    - PATCH
+    - OPTIONS
+  allowed-headers:
+    - "*"
+  allow-credentials: true
+  max-age: 3600
+
+# File Upload Configuration
+app:
+  file:
+    upload:
+      directory: ./uploads
+      max-size: 10485760 # 10MB
+      allowed-types: jpg,jpeg,png,pdf,doc,docx,txt,zip,xlsx,csv
+
+  # Notification Configuration
+  notification:
+    email:
+      enabled: true
+      from: noreply@smartdesk.com
+      templates:
+        welcome: classpath:templates/email/welcome.html
+        ticket-notification: classpath:templates/email/ticket-notification.html
+        password-reset: classpath:templates/email/password-reset.html
+    sms:
+      enabled: false
+      provider: twilio
+
+  # Business Rules
+  business:
+    ticket:
+      auto-assign: true
+      escalation-hours: 24
+      auto-close-days: 7
+    sla:
+      default-response-hours: 4
+      default-resolution-hours: 24
+    user:
+      max-login-attempts: 5
+      lockout-duration-minutes: 30
+
+  # Performance Configuration
+  performance:
+    async:
+      core-pool-size: 5
+      max-pool-size: 20
+      queue-capacity: 100
+    batch:
+      size: 100
+
+  # Security Configuration
+  security:
+    rate-limiting:
+      enabled: true
+      requests-per-minute: 60
+    cors:
+      enabled: true
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.example.smartdeskbackend: DEBUG
+    org.springframework.security: INFO
+    org.springframework.web: INFO
+    org.hibernate.SQL: false
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/smartdesk-backend.log
+    max-size: 10MB
+    max-history: 30
+
+# Management & Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: always
+  health:
+    disk-space:
+      enabled: true
+    database:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+
+# SpringDoc OpenAPI Configuration
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operationsSorter: method
+    tagsSorter: alpha
+    disable-swagger-default-url: true
+    display-request-duration: true
+    doc-expansion: none
+  show-actuator: true
+  default-consumes-media-type: application/json
+  default-produces-media-type: application/json
+
+# Application Info
+info:
+  app:
+    name: SmartDesk CRM Backend
+    description: Kurumsal müşteri destek ve çağrı merkezi yönetim sistemi
+    version: 1.0.0
+    author: Erdemir Bilgi Teknolojileri
+    contact:
+      email: support@smartdesk.com
+      url: https://smartdesk.com
+  build:
+    artifact: smartdesk-backend
+    name: SmartDesk Backend
+    time: unknown
+    version: 1.0.0
+
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/smartdesk?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Europe/Istanbul
+    username: root
+    password: 61611616
+
+  jpa:
+    show-sql: true
+    hibernate:
+      ddl-auto: create-drop
+
+  mail:
+    host: localhost
+    port: 1025
+
+logging:
+  level:
+    com.example.smartdeskbackend: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: DEBUG
+
+app:
+  notification:
+    email:
+      enabled: false
+
+---
+# Production Profile
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/smartdesk?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Europe/Istanbul
+    username: root
+    password: 61611616
+    hikari:
+      maximum-pool-size: 30
+
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: validate
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: your-email@gmail.com
+    password: your-app-password
+
+logging:
+  level:
+    root: WARN
+    com.example.smartdeskbackend: INFO
+    org.hibernate.SQL: WARN
