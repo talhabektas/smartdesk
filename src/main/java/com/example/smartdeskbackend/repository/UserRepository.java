@@ -224,8 +224,8 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
      */
     @Query("SELECT u.id, u.firstName, u.lastName, u.email, " +
             "COUNT(DISTINCT t.id) as ticketCount, " +
-            "AVG(CASE WHEN t.status IN ('RESOLVED', 'CLOSED') " +
-            "    THEN TIMESTAMPDIFF(HOUR, t.createdAt, t.resolvedAt) END) as avgResolutionTime " +
+            "AVG(CASE WHEN t.status IN ('RESOLVED', 'CLOSED') AND t.resolvedAt IS NOT NULL " +
+            "    THEN FUNCTION('TIMESTAMPDIFF', HOUR, t.createdAt, t.resolvedAt) END) as avgResolutionTime " +
             "FROM User u " +
             "LEFT JOIN u.assignedTickets t " +
             "WHERE u.company.id = :companyId " +
