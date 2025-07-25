@@ -126,4 +126,10 @@ public class Customer extends AuditableEntity {
 
     public List<Ticket> getTickets() { return tickets; }
     public void setTickets(List<Ticket> tickets) { this.tickets = tickets; }
+
+    @Override
+    public String toString() {
+        return String.format("Customer{id=%d, email='%s', fullName='%s', segment=%s}",
+                getId(), email, getFullName(), segment);
+    }
 }

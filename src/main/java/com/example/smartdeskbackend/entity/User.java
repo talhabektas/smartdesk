@@ -90,9 +90,9 @@ public class User extends AuditableEntity {
     @JoinColumn(name = "department_id", foreignKey = @ForeignKey(name = "fk_user_department"))
     private Department department;
 
-    // Tickets created by this user (for customers)
-    @OneToMany(mappedBy = "customer", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
-    private List<Ticket> customerTickets = new ArrayList<>();
+    // Tickets created by this user (for customers) - User'lar customer olarak ticket oluşturursa
+    @OneToMany(mappedBy = "creatorUser", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<Ticket> createdTickets = new ArrayList<>();
 
     // Tickets assigned to this user (for agents)
     @OneToMany(mappedBy = "assignedAgent", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
@@ -261,8 +261,8 @@ public class User extends AuditableEntity {
     public Department getDepartment() { return department; }
     public void setDepartment(Department department) { this.department = department; }
 
-    public List<Ticket> getCustomerTickets() { return customerTickets; }
-    public void setCustomerTickets(List<Ticket> customerTickets) { this.customerTickets = customerTickets; }
+    public List<Ticket> getCreatedTickets() { return createdTickets; }
+    public void setCreatedTickets(List<Ticket> createdTickets) { this.createdTickets = createdTickets; }
 
     public List<Ticket> getAssignedTickets() { return assignedTickets; }
     public void setAssignedTickets(List<Ticket> assignedTickets) { this.assignedTickets = assignedTickets; }

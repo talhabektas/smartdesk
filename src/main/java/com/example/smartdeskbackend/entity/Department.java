@@ -8,7 +8,6 @@ import jakarta.validation.constraints.Size;
 import java.util.ArrayList;
 import java.util.List;
 
-
 @Entity
 @Table(name = "departments", indexes = {
         @Index(name = "idx_department_company", columnList = "company_id"),
