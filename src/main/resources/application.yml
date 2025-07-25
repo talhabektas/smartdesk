@@ -2,7 +2,7 @@
 # Ana yapılandırma dosyası
 
 server:
-  port: 8080
+  port: 8067
   servlet:
     context-path: /api
   error:
