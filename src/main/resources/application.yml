@@ -16,7 +16,7 @@ spring:
   profiles:
     active: dev
 
-  # Database Configuration
+  # Database Configuration - Sadece MySQL
   datasource:
     url: jdbc:mysql://localhost:3306/smartdesk?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Europe/Istanbul
     username: root
@@ -52,12 +52,12 @@ spring:
         generate_statistics: false
     defer-datasource-initialization: true
 
-  # SQL Initialization
+  # SQL Initialization - Sadece data.sql kullan
   sql:
     init:
       mode: always
       data-locations: classpath:data.sql
-      continue-on-error: false
+      continue-on-error: true
 
   # Mail Configuration
   mail:
@@ -207,9 +207,6 @@ management:
       enabled: true
     database:
       enabled: true
-  metrics:
-    export:
-      prometheus:
   info:
     env:
       enabled: true
@@ -259,7 +256,7 @@ spring:
       on-profile: dev
 
   datasource:
-    url: jdbc:mysql://localhost:3306/smartdesk?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Europe/Istanbul
+    url: jdbc:mysql://localhost:3306/smartdesk_dev?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Europe/Istanbul
     username: root
     password: 61611616
 
@@ -268,9 +265,10 @@ spring:
     hibernate:
       ddl-auto: create-drop
 
-  mail:
-    host: localhost
-    port: 1025
+  sql:
+    init:
+      mode: always
+      data-locations: classpath:data.sql
 
 logging:
   level:
@@ -285,6 +283,38 @@ app:
       enabled: false
 
 ---
+# Test Profile - Test için ayrı MySQL DB
+spring:
+  config:
+    activate:
+      on-profile: test
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/smartdesk_test?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Europe/Istanbul
+    username: root
+    password: 61611616
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  jpa:
+    show-sql: false
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQL8Dialect
+
+  # Test'lerde SQL script'leri çalıştırma
+  sql:
+    init:
+      mode: never
+
+logging:
+  level:
+    com.example.smartdeskbackend: WARN
+    org.springframework.security: WARN
+    org.hibernate.SQL: WARN
+
+---
 # Production Profile
 spring:
   config:
@@ -293,8 +323,8 @@ spring:
 
   datasource:
     url: jdbc:mysql://localhost:3306/smartdesk?useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=Europe/Istanbul
-    username: root
-    password: 61611616
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:61611616}
     hikari:
       maximum-pool-size: 30
 
@@ -303,11 +333,9 @@ spring:
     hibernate:
       ddl-auto: validate
 
-  mail:
-    host: smtp.gmail.com
-    port: 587
-    username: your-email@gmail.com
-    password: your-app-password
+  sql:
+    init:
+      mode: never
 
 logging:
   level:

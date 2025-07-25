@@ -33,7 +33,8 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     /**
      * Aktif kullanıcıyı email ile bulma
      */
-    @Query("SELECT u FROM User u WHERE u.email = :email AND u.status != 'DELETED'")
+    @Query(value = "SELECT * FROM users u WHERE u.email = :email AND u.status != 'DELETED'",
+            nativeQuery = true)
     Optional<User> findByEmailAndIsActiveTrue(@Param("email") String email);
 
     /**
@@ -59,16 +60,15 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     List<User> findByCompanyId(Long companyId);
 
     /**
-     * Şirkete ait aktif kullanıcıları bulma
+     * Şirkete ait belirli statüdeki kullanıcıları bulma
      */
-    @Query("SELECT u FROM User u WHERE u.company.id = :companyId AND u.status = :status")
-    List<User> findByCompanyIdAndStatus(@Param("companyId") Long companyId,
-                                        @Param("status") UserStatus status);
+    List<User> findByCompanyIdAndStatus(Long companyId, UserStatus status);
 
     /**
      * Şirkete ait kullanıcı sayısı
      */
-    @Query("SELECT COUNT(u) FROM User u WHERE u.company.id = :companyId AND u.status != 'DELETED'")
+    @Query(value = "SELECT COUNT(*) FROM users WHERE company_id = :companyId AND status != 'DELETED'",
+            nativeQuery = true)
     long countByCompanyId(@Param("companyId") Long companyId);
 
     // ============ Role-based Queries ============
@@ -86,47 +86,60 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     /**
      * Departman ve role göre kullanıcıları bulma
      */
-    @Query("SELECT u FROM User u WHERE u.department.id = :departmentId " +
-            "AND u.role = :role AND u.status = 'ACTIVE'")
+    @Query(value = "SELECT * FROM users u WHERE u.department_id = :departmentId " +
+            "AND u.role = :role AND u.status = 'ACTIVE'",
+            nativeQuery = true)
     List<User> findByDepartmentIdAndRole(@Param("departmentId") Long departmentId,
-                                         @Param("role") UserRole role);
+                                         @Param("role") String role);
 
     // ============ Agent-specific Queries ============
 
     /**
      * Şirketteki aktif agent'ları bulma
      */
-    @Query("SELECT u FROM User u WHERE u.company.id = :companyId " +
-            "AND u.role IN ('AGENT', 'MANAGER') AND u.status = 'ACTIVE'")
+    @Query(value = "SELECT * FROM users u WHERE u.company_id = :companyId " +
+            "AND u.role IN ('AGENT', 'MANAGER') AND u.status = 'ACTIVE'",
+            nativeQuery = true)
     List<User> findActiveAgentsByCompanyId(@Param("companyId") Long companyId);
 
     /**
      * Departmandaki agent'ları bulma
      */
-    @Query("SELECT u FROM User u WHERE u.department.id = :departmentId " +
-            "AND u.role = 'AGENT' AND u.status = 'ACTIVE'")
+    @Query(value = "SELECT * FROM users u WHERE u.department_id = :departmentId " +
+            "AND u.role = 'AGENT' AND u.status = 'ACTIVE'",
+            nativeQuery = true)
     List<User> findAgentsByDepartmentId(@Param("departmentId") Long departmentId);
 
     /**
      * En az ticket'a sahip agent'ı bulma (load balancing için)
      */
-    @Query("SELECT u FROM User u LEFT JOIN u.assignedTickets t " +
-            "WHERE u.department.id = :departmentId AND u.role = 'AGENT' " +
+    @Query(value = "SELECT u.* FROM users u " +
+            "LEFT JOIN tickets t ON u.id = t.assigned_agent_id " +
+            "WHERE u.department_id = :departmentId AND u.role = 'AGENT' " +
             "AND u.status = 'ACTIVE' " +
             "GROUP BY u.id " +
-            "ORDER BY COUNT(t) ASC")
-    List<User> findLeastBusyAgents(@Param("departmentId") Long departmentId, Pageable pageable);
+            "ORDER BY COUNT(t.id) ASC " +
+            "LIMIT :limit",
+            nativeQuery = true)
+    List<User> findLeastBusyAgents(@Param("departmentId") Long departmentId,
+                                   @Param("limit") int limit);
 
     // ============ Search and Filter Queries ============
 
     /**
      * İsim veya email ile arama
      */
-    @Query("SELECT u FROM User u WHERE u.company.id = :companyId " +
-            "AND (LOWER(u.firstName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) " +
-            "OR LOWER(u.lastName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) " +
+    @Query(value = "SELECT * FROM users u WHERE u.company_id = :companyId " +
+            "AND (LOWER(u.first_name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) " +
+            "OR LOWER(u.last_name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) " +
             "OR LOWER(u.email) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) " +
-            "AND u.status != 'DELETED'")
+            "AND u.status != 'DELETED'",
+            countQuery = "SELECT COUNT(*) FROM users u WHERE u.company_id = :companyId " +
+                    "AND (LOWER(u.first_name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) " +
+                    "OR LOWER(u.last_name) LIKE LOWER(CONCAT('%', :searchTerm, '%')) " +
+                    "OR LOWER(u.email) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) " +
+                    "AND u.status != 'DELETED'",
+            nativeQuery = true)
     Page<User> searchUsers(@Param("companyId") Long companyId,
                            @Param("searchTerm") String searchTerm,
                            Pageable pageable);
@@ -134,14 +147,20 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     /**
      * Multiple criteria ile kullanıcı arama
      */
-    @Query("SELECT u FROM User u WHERE u.company.id = :companyId " +
+    @Query(value = "SELECT * FROM users u WHERE u.company_id = :companyId " +
             "AND (:role IS NULL OR u.role = :role) " +
             "AND (:status IS NULL OR u.status = :status) " +
-            "AND (:departmentId IS NULL OR u.department.id = :departmentId) " +
-            "AND u.status != 'DELETED'")
+            "AND (:departmentId IS NULL OR u.department_id = :departmentId) " +
+            "AND u.status != 'DELETED'",
+            countQuery = "SELECT COUNT(*) FROM users u WHERE u.company_id = :companyId " +
+                    "AND (:role IS NULL OR u.role = :role) " +
+                    "AND (:status IS NULL OR u.status = :status) " +
+                    "AND (:departmentId IS NULL OR u.department_id = :departmentId) " +
+                    "AND u.status != 'DELETED'",
+            nativeQuery = true)
     Page<User> findUsersWithFilters(@Param("companyId") Long companyId,
-                                    @Param("role") UserRole role,
-                                    @Param("status") UserStatus status,
+                                    @Param("role") String role,
+                                    @Param("status") String status,
                                     @Param("departmentId") Long departmentId,
                                     Pageable pageable);
 
@@ -150,26 +169,29 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     /**
      * Şirketteki role göre kullanıcı sayıları
      */
-    @Query("SELECT u.role, COUNT(u) FROM User u " +
-            "WHERE u.company.id = :companyId AND u.status != 'DELETED' " +
-            "GROUP BY u.role")
+    @Query(value = "SELECT u.role, COUNT(*) FROM users u " +
+            "WHERE u.company_id = :companyId AND u.status != 'DELETED' " +
+            "GROUP BY u.role",
+            nativeQuery = true)
     List<Object[]> countUsersByRoleAndCompany(@Param("companyId") Long companyId);
 
     /**
      * Son login tarihine göre aktif kullanıcı sayısı
      */
-    @Query("SELECT COUNT(u) FROM User u WHERE u.company.id = :companyId " +
-            "AND u.lastLogin >= :since AND u.status = 'ACTIVE'")
+    @Query(value = "SELECT COUNT(*) FROM users u WHERE u.company_id = :companyId " +
+            "AND u.last_login >= :since AND u.status = 'ACTIVE'",
+            nativeQuery = true)
     long countActiveUsersSince(@Param("companyId") Long companyId,
                                @Param("since") LocalDateTime since);
 
     /**
      * Departman başına kullanıcı sayıları
      */
-    @Query("SELECT d.name, COUNT(u) FROM User u " +
-            "RIGHT JOIN u.department d " +
-            "WHERE u.company.id = :companyId AND u.status != 'DELETED' " +
-            "GROUP BY d.id, d.name")
+    @Query(value = "SELECT d.name, COUNT(u.id) FROM departments d " +
+            "LEFT JOIN users u ON d.id = u.department_id " +
+            "WHERE d.company_id = :companyId AND (u.status IS NULL OR u.status != 'DELETED') " +
+            "GROUP BY d.id, d.name",
+            nativeQuery = true)
     List<Object[]> countUsersByDepartment(@Param("companyId") Long companyId);
 
     // ============ Maintenance Queries ============
@@ -178,43 +200,49 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
      * Soft delete - kullanıcıyı silindi olarak işaretle
      */
     @Modifying
-    @Query("UPDATE User u SET u.status = 'DELETED' WHERE u.id = :userId")
+    @Query(value = "UPDATE users SET status = 'DELETED' WHERE id = :userId",
+            nativeQuery = true)
     void softDeleteUser(@Param("userId") Long userId);
 
     /**
      * Kullanıcı hesabını kilitle
      */
     @Modifying
-    @Query("UPDATE User u SET u.lockedUntil = :lockUntil WHERE u.id = :userId")
+    @Query(value = "UPDATE users SET locked_until = :lockUntil WHERE id = :userId",
+            nativeQuery = true)
     void lockUser(@Param("userId") Long userId, @Param("lockUntil") LocalDateTime lockUntil);
 
     /**
      * Kullanıcı hesabının kilidini aç
      */
     @Modifying
-    @Query("UPDATE User u SET u.lockedUntil = NULL, u.loginAttempts = 0 WHERE u.id = :userId")
+    @Query(value = "UPDATE users SET locked_until = NULL, login_attempts = 0 WHERE id = :userId",
+            nativeQuery = true)
     void unlockUser(@Param("userId") Long userId);
 
     /**
      * Son giriş tarihini güncelle
      */
     @Modifying
-    @Query("UPDATE User u SET u.lastLogin = :loginTime WHERE u.id = :userId")
+    @Query(value = "UPDATE users SET last_login = :loginTime WHERE id = :userId",
+            nativeQuery = true)
     void updateLastLogin(@Param("userId") Long userId, @Param("loginTime") LocalDateTime loginTime);
 
     /**
      * Süresi dolmuş reset token'ları temizle
      */
     @Modifying
-    @Query("UPDATE User u SET u.passwordResetToken = NULL, u.passwordResetExpires = NULL " +
-            "WHERE u.passwordResetExpires < :now")
+    @Query(value = "UPDATE users SET password_reset_token = NULL, password_reset_expires = NULL " +
+            "WHERE password_reset_expires < :now",
+            nativeQuery = true)
     void cleanupExpiredResetTokens(@Param("now") LocalDateTime now);
 
     /**
      * Email doğrulama token'ını temizle
      */
     @Modifying
-    @Query("UPDATE User u SET u.emailVerificationToken = NULL WHERE u.id = :userId")
+    @Query(value = "UPDATE users SET email_verification_token = NULL WHERE id = :userId",
+            nativeQuery = true)
     void clearEmailVerificationToken(@Param("userId") Long userId);
 
     // ============ Performance Queries ============
@@ -222,18 +250,19 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     /**
      * Agent performans verileri için query
      */
-    @Query("SELECT u.id, u.firstName, u.lastName, u.email, " +
-            "COUNT(DISTINCT t.id) as ticketCount, " +
-            "AVG(CASE WHEN t.status IN ('RESOLVED', 'CLOSED') AND t.resolvedAt IS NOT NULL " +
-            "    THEN FUNCTION('TIMESTAMPDIFF', HOUR, t.createdAt, t.resolvedAt) END) as avgResolutionTime " +
-            "FROM User u " +
-            "LEFT JOIN u.assignedTickets t " +
-            "WHERE u.company.id = :companyId " +
+    @Query(value = "SELECT u.id, u.first_name, u.last_name, u.email, " +
+            "COUNT(DISTINCT t.id) as ticket_count, " +
+            "AVG(CASE WHEN t.status IN ('RESOLVED', 'CLOSED') AND t.resolved_at IS NOT NULL " +
+            "    THEN TIMESTAMPDIFF(HOUR, t.created_at, t.resolved_at) END) as avg_resolution_time " +
+            "FROM users u " +
+            "LEFT JOIN tickets t ON u.id = t.assigned_agent_id " +
+            "WHERE u.company_id = :companyId " +
             "AND u.role IN ('AGENT', 'MANAGER') " +
             "AND u.status = 'ACTIVE' " +
-            "AND (:startDate IS NULL OR t.createdAt >= :startDate) " +
-            "AND (:endDate IS NULL OR t.createdAt <= :endDate) " +
-            "GROUP BY u.id, u.firstName, u.lastName, u.email")
+            "AND (:startDate IS NULL OR t.created_at >= :startDate) " +
+            "AND (:endDate IS NULL OR t.created_at <= :endDate) " +
+            "GROUP BY u.id, u.first_name, u.last_name, u.email",
+            nativeQuery = true)
     List<Object[]> getAgentPerformanceStats(@Param("companyId") Long companyId,
                                             @Param("startDate") LocalDateTime startDate,
                                             @Param("endDate") LocalDateTime endDate);
@@ -254,7 +283,48 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
             "          FROM ticket_comments WHERE created_at >= DATE_SUB(NOW(), INTERVAL 30 DAY) " +
             "          GROUP BY author_id) cc ON u.id = cc.author_id " +
             "WHERE u.company_id = :companyId AND u.status != 'DELETED' " +
-            "ORDER BY (COALESCE(ticket_count, 0) + COALESCE(comment_count, 0)) DESC",
+            "ORDER BY (COALESCE(ticket_count, 0) + COALESCE(comment_count, 0)) DESC " +
+            "LIMIT :limit",
             nativeQuery = true)
-    List<User> findMostActiveUsers(@Param("companyId") Long companyId, Pageable pageable);
+    List<User> findMostActiveUsers(@Param("companyId") Long companyId, @Param("limit") int limit);
+
+    // ============ Helper Methods for Services ============
+
+    /**
+     * Pageable için findLeastBusyAgents wrapper
+     */
+    default List<User> findLeastBusyAgents(Long departmentId, Pageable pageable) {
+        return findLeastBusyAgents(departmentId, pageable.getPageSize());
+    }
+
+    /**
+     * Pageable için findMostActiveUsers wrapper
+     */
+    default List<User> findMostActiveUsers(Long companyId, Pageable pageable) {
+        return findMostActiveUsers(companyId, pageable.getPageSize());
+    }
+
+    // ============ Enum-safe Helper Methods ============
+
+    /**
+     * UserRole enum ile departman kullanıcıları
+     */
+    default List<User> findByDepartmentIdAndRole(Long departmentId, UserRole role) {
+        return findByDepartmentIdAndRole(departmentId, role.getCode());
+    }
+
+    /**
+     * Multiple filters için enum-safe versiyon
+     */
+    default Page<User> findUsersWithFilters(Long companyId, UserRole role,
+                                            UserStatus status, Long departmentId,
+                                            Pageable pageable) {
+        return findUsersWithFilters(
+                companyId,
+                role != null ? role.getCode() : null,
+                status != null ? status.getCode() : null,
+                departmentId,
+                pageable
+        );
+    }
 }

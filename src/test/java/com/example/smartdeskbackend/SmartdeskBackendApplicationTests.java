@@ -2,9 +2,11 @@ package com.example.smartdeskbackend;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 
 @SpringBootTest
-class SmartdeskBackendApplicationTests {
+@ActiveProfiles("test")
+public class SmartdeskBackendApplicationTests {
 
     @Test
     void contextLoads() {
