@@ -5,13 +5,6 @@ import com.example.smartdeskbackend.dto.request.auth.RegisterRequest;
 import com.example.smartdeskbackend.dto.response.auth.AuthResponse;
 import com.example.smartdeskbackend.service.AuthService;
 import com.example.smartdeskbackend.util.JwtUtil;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import org.slf4j.Logger;
@@ -32,7 +25,6 @@ import java.util.Map;
  */
 @RestController
 @RequestMapping("/api/v1/auth")
-@Tag(name = "Authentication", description = "Kullanıcı kimlik doğrulama ve yetkilendirme işlemleri")
 @CrossOrigin(origins = {"http://localhost:3000", "http://localhost:3001"})
 public class AuthController {
 
@@ -48,15 +40,6 @@ public class AuthController {
      * Kullanıcı giriş işlemi
      */
     @PostMapping("/login")
-    @Operation(summary = "Kullanıcı Girişi",
-            description = "Email ve şifre ile sistem girişi yapılır. JWT token döndürülür.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Giriş başarılı",
-                    content = @Content(schema = @Schema(implementation = AuthResponse.class))),
-            @ApiResponse(responseCode = "401", description = "Geçersiz kimlik bilgileri"),
-            @ApiResponse(responseCode = "423", description = "Hesap kilitli"),
-            @ApiResponse(responseCode = "400", description = "Geçersiz istek parametreleri")
-    })
     public ResponseEntity<?> login(
             @Valid @RequestBody LoginRequest loginRequest,
             HttpServletRequest request) {
@@ -87,14 +70,6 @@ public class AuthController {
      * Yeni kullanıcı kaydı
      */
     @PostMapping("/register")
-    @Operation(summary = "Kullanıcı Kaydı",
-            description = "Yeni kullanıcı hesabı oluşturulur. Email doğrulaması gerekebilir.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "201", description = "Kayıt başarılı",
-                    content = @Content(schema = @Schema(implementation = AuthResponse.class))),
-            @ApiResponse(responseCode = "409", description = "Kullanıcı zaten mevcut"),
-            @ApiResponse(responseCode = "400", description = "Geçersiz kayıt bilgileri")
-    })
     public ResponseEntity<?> register(
             @Valid @RequestBody RegisterRequest registerRequest,
             HttpServletRequest request) {
@@ -128,13 +103,6 @@ public class AuthController {
      * Token yenileme işlemi
      */
     @PostMapping("/refresh")
-    @Operation(summary = "Token Yenileme",
-            description = "Refresh token kullanarak yeni access token alınır.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Token yenileme başarılı",
-                    content = @Content(schema = @Schema(implementation = AuthResponse.class))),
-            @ApiResponse(responseCode = "401", description = "Geçersiz refresh token")
-    })
     public ResponseEntity<?> refreshToken(
             @RequestBody Map<String, String> request) {
 
@@ -170,12 +138,6 @@ public class AuthController {
      * Kullanıcı çıkış işlemi
      */
     @PostMapping("/logout")
-    @Operation(summary = "Kullanıcı Çıkışı",
-            description = "Aktif session sonlandırılır ve token geçersizleştirilir.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Çıkış başarılı"),
-            @ApiResponse(responseCode = "401", description = "Geçersiz token")
-    })
     public ResponseEntity<?> logout(HttpServletRequest request) {
 
         String token = extractTokenFromRequest(request);
@@ -210,12 +172,6 @@ public class AuthController {
      * Şifre sıfırlama isteği
      */
     @PostMapping("/forgot-password")
-    @Operation(summary = "Şifre Sıfırlama İsteği",
-            description = "Email adresine şifre sıfırlama linki gönderilir.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Sıfırlama emaili gönderildi"),
-            @ApiResponse(responseCode = "404", description = "Kullanıcı bulunamadı")
-    })
     public ResponseEntity<?> forgotPassword(
             @RequestBody Map<String, String> request) {
 
@@ -257,12 +213,6 @@ public class AuthController {
      * Şifre sıfırlama
      */
     @PostMapping("/reset-password")
-    @Operation(summary = "Şifre Sıfırlama",
-            description = "Reset token ile yeni şifre belirlenir.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Şifre başarıyla sıfırlandı"),
-            @ApiResponse(responseCode = "401", description = "Geçersiz veya süresi dolmuş token")
-    })
     public ResponseEntity<?> resetPassword(
             @RequestBody Map<String, String> request) {
 
@@ -304,12 +254,6 @@ public class AuthController {
      * Email doğrulama
      */
     @PostMapping("/verify-email")
-    @Operation(summary = "Email Doğrulama",
-            description = "Email doğrulama token'ı ile hesap aktifleştirme.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Email başarıyla doğrulandı"),
-            @ApiResponse(responseCode = "401", description = "Geçersiz doğrulama token'ı")
-    })
     public ResponseEntity<?> verifyEmail(
             @RequestParam("token") String token) {
 
@@ -348,12 +292,6 @@ public class AuthController {
      * Token doğrulama
      */
     @PostMapping("/validate-token")
-    @Operation(summary = "Token Doğrulama",
-            description = "JWT token'ın geçerliliğini kontrol eder.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Token geçerli"),
-            @ApiResponse(responseCode = "401", description = "Token geçersiz")
-    })
     public ResponseEntity<?> validateToken(HttpServletRequest request) {
 
         String token = extractTokenFromRequest(request);
@@ -400,13 +338,6 @@ public class AuthController {
      */
     @PostMapping("/change-password")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Şifre Değiştirme",
-            description = "Mevcut kullanıcının şifresini değiştirir.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Şifre başarıyla değiştirildi"),
-            @ApiResponse(responseCode = "401", description = "Mevcut şifre yanlış"),
-            @ApiResponse(responseCode = "403", description = "Yetki yok")
-    })
     public ResponseEntity<?> changePassword(
             @RequestBody Map<String, String> request,
             HttpServletRequest httpRequest) {
@@ -453,12 +384,6 @@ public class AuthController {
      */
     @GetMapping("/me")
     @PreAuthorize("isAuthenticated()")
-    @Operation(summary = "Kullanıcı Profil Bilgisi",
-            description = "JWT token'dan kullanıcı bilgilerini döndürür.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Profil bilgileri başarıyla alındı"),
-            @ApiResponse(responseCode = "401", description = "Geçersiz token")
-    })
     public ResponseEntity<?> getCurrentUser(HttpServletRequest request) {
 
         try {
@@ -492,8 +417,6 @@ public class AuthController {
      * Health check endpoint
      */
     @GetMapping("/health")
-    @Operation(summary = "Auth Service Health Check",
-            description = "Authentication service'in durumunu kontrol eder.")
     public ResponseEntity<?> healthCheck() {
 
         Map<String, Object> response = new HashMap<>();

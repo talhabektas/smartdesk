@@ -24,7 +24,6 @@ import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 
 import java.util.Arrays;
-import java.util.List;
 
 /**
  * Spring Security yapılandırması
@@ -136,20 +135,18 @@ public class SecurityConfig {
 
                 // Authorization rules
                 .authorizeHttpRequests(authz -> authz
-                        // Public endpoints - authentication gerektirmeyen
+                        // Ana sayfa ve temel endpoint'ler
+                        .requestMatchers("/").permitAll()
+                        .requestMatchers("/health").permitAll()
+                        .requestMatchers("/info").permitAll()
+
+                        // Authentication endpoint'leri - MUTLAKA PUBLIC OLMALI
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/public/**").permitAll()
 
                         // Health check ve actuator endpoints
                         .requestMatchers("/actuator/**").permitAll()
                         .requestMatchers("/health/**").permitAll()
-
-                        // API documentation endpoints
-                        .requestMatchers("/swagger-ui/**").permitAll()
-                        .requestMatchers("/swagger-ui.html").permitAll()
-                        .requestMatchers("/v3/api-docs/**").permitAll()
-                        .requestMatchers("/swagger-resources/**").permitAll()
-                        .requestMatchers("/webjars/**").permitAll()
 
                         // File download endpoints (authentication sonrası kontrol edilecek)
                         .requestMatchers(HttpMethod.GET, "/api/v1/files/**").authenticated()

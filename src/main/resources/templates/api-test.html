@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SmartDesk API Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .endpoint-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 2px solid #e1e5e9;
+            border-radius: 8px;
+            background: #f8f9fa;
+        }
+
+        .endpoint-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #495057;
+            margin-bottom: 10px;
+        }
+
+        .url {
+            background: #e9ecef;
+            padding: 10px;
+            border-radius: 5px;
+            font-family: monospace;
+            word-break: break-all;
+        }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .test-button {
+            background: #28a745;
+        }
+
+        .test-button:hover {
+            background: #1e7e34;
+        }
+
+        .response {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 10px;
+            white-space: pre-wrap;
+            font-family: monospace;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .login-form {
+            display: grid;
+            gap: 10px;
+            max-width: 400px;
+        }
+
+        input {
+            padding: 8px;
+            border: 1px solid #ced4da;
+            border-radius: 4px;
+        }
+
+        .success {
+            color: #155724;
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            padding: 10px;
+            border-radius: 4px;
+        }
+
+        .error {
+            color: #721c24;
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            padding: 10px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>🚀 SmartDesk CRM API Test Console</h1>
+
+    <!-- API Status -->
+    <div class="endpoint-section">
+        <div class="endpoint-title">📊 API Status</div>
+        <div class="url">GET http://localhost:8067/api/</div>
+        <button class="test-button" onclick="testEndpoint('/')">Test Ana Sayfa</button>
+        <button class="test-button" onclick="testEndpoint('/health')">Test Health</button>
+        <button class="test-button" onclick="testEndpoint('/info')">Test Info</button>
+        <div id="status-response" class="response" style="display:none;"></div>
+    </div>
+
+    <!-- Auth Endpoints -->
+    <div class="endpoint-section">
+        <div class="endpoint-title">🔐 Authentication Endpoints</div>
+        <div class="url">GET http://localhost:8067/api/v1/auth/health</div>
+        <button class="test-button" onclick="testEndpoint('/v1/auth/health')">Test Auth Health</button>
+        <div id="auth-health-response" class="response" style="display:none;"></div>
+    </div>
+
+    <!-- Login Test -->
+    <div class="endpoint-section">
+        <div class="endpoint-title">🔑 Login Test</div>
+        <div class="url">POST http://localhost:8067/api/v1/auth/login</div>
+        <div class="login-form">
+            <input type="email" id="email" placeholder="Email" value="admin@erdemir.com.tr">
+            <input type="password" id="password" placeholder="Password" value="password123">
+            <button class="test-button" onclick="testLogin()">Test Login</button>
+        </div>
+        <div id="login-response" class="response" style="display:none;"></div>
+    </div>
+
+    <!-- Actuator -->
+    <div class="endpoint-section">
+        <div class="endpoint-title">⚙️ Actuator Endpoints</div>
+        <div class="url">GET http://localhost:8067/api/actuator/health</div>
+        <button class="test-button" onclick="testEndpoint('/actuator/health')">Test Actuator Health</button>
+        <div id="actuator-response" class="response" style="display:none;"></div>
+    </div>
+</div>
+
+<script>
+    const API_BASE = 'http://localhost:8067/api';
+
+    async function testEndpoint(endpoint) {
+        const responseId = endpoint.replace(/\//g, '-') + '-response';
+        const responseDiv = document.getElementById(responseId) ||
+            document.getElementById('status-response') ||
+            document.getElementById('actuator-response');
+
+        try {
+            responseDiv.style.display = 'block';
+            responseDiv.textContent = 'Loading...';
+            responseDiv.className = 'response';
+
+            const response = await fetch(API_BASE + endpoint);
+            const data = await response.text();
+
+            try {
+                const jsonData = JSON.parse(data);
+                responseDiv.textContent = JSON.stringify(jsonData, null, 2);
+            } catch {
+                responseDiv.textContent = data;
+            }
+
+            if (response.ok) {
+                responseDiv.className = 'response success';
+            } else {
+                responseDiv.className = 'response error';
+            }
+
+        } catch (error) {
+            responseDiv.style.display = 'block';
+            responseDiv.className = 'response error';
+            responseDiv.textContent = 'Error: ' + error.message;
+        }
+    }
+
+    async function testLogin() {
+        const email = document.getElementById('email').value;
+        const password = document.getElementById('password').value;
+        const responseDiv = document.getElementById('login-response');
+
+        try {
+            responseDiv.style.display = 'block';
+            responseDiv.textContent = 'Logging in...';
+            responseDiv.className = 'response';
+
+            const response = await fetch(API_BASE + '/v1/auth/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ email, password })
+            });
+
+            const data = await response.json();
+            responseDiv.textContent = JSON.stringify(data, null, 2);
+
+            if (response.ok) {
+                responseDiv.className = 'response success';
+                // Token'ı localStorage'a kaydet
+                if (data.access_token) {
+                    localStorage.setItem('auth_token', data.access_token);
+                }
+            } else {
+                responseDiv.className = 'response error';
+            }
+
+        } catch (error) {
+            responseDiv.style.display = 'block';
+            responseDiv.className = 'response error';
+            responseDiv.textContent = 'Error: ' + error.message;
+        }
+    }
+
+    // Sayfa yüklendiğinde ana endpoint'i test et
+    window.onload = function() {
+        testEndpoint('/');
+    };
+</script>
+</body>
+</html>
