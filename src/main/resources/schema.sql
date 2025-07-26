@@ -1,2 +1,0 @@
--- Bu dosya JPA tarafından otomatik tablo oluşturma için boş bırakılmıştır
--- Hibernate ddl-auto: update kullanılıyor
