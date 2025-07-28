@@ -116,6 +116,9 @@ public class SecurityConfig {
     /**
      * Security filter chain yapılandırması
      */
+    /**
+     * Security filter chain yapılandırması
+     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -133,28 +136,39 @@ public class SecurityConfig {
                 .exceptionHandling(exceptions ->
                         exceptions.authenticationEntryPoint(jwtAuthenticationEntryPoint))
 
-                // Authorization rules
+                // Authorization rules - SIRALAMA ÇOK ÖNEMLİ!
+                // Authorization rules - SIRALAMA ÇOK ÖNEMLİ!
                 .authorizeHttpRequests(authz -> authz
-                        // Ana sayfa ve temel endpoint'ler
-                        .requestMatchers("/").permitAll()
-                        .requestMatchers("/health").permitAll()
-                        .requestMatchers("/info").permitAll()
+                        // OPTIONS requests - CORS preflight için - EN BAŞTA OLMALI
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
 
-                        // Authentication endpoint'leri - MUTLAKA PUBLIC OLMALI
+                        // Ana sayfa ve temel endpoint'ler - EXACT MATCH
+                        .requestMatchers("/", "/health", "/info").permitAll()
+
+                        // Authentication ve Public endpoint'leri - WILDCARD PATTERNS
                         .requestMatchers("/api/v1/auth/**").permitAll()
                         .requestMatchers("/api/v1/public/**").permitAll()
+                        .requestMatchers("/api/v1/test/**").permitAll()
 
-                        // Health check ve actuator endpoints
+                        // Actuator endpoints
+                        .requestMatchers("/api/actuator/**").permitAll()
                         .requestMatchers("/actuator/**").permitAll()
-                        .requestMatchers("/health/**").permitAll()
 
-                        // File download endpoints (authentication sonrası kontrol edilecek)
-                        .requestMatchers(HttpMethod.GET, "/api/v1/files/**").authenticated()
+                        // Development endpoints
+                        .requestMatchers("/api/swagger-ui/**").permitAll()
+                        .requestMatchers("/api/v3/api-docs/**").permitAll()
+                        .requestMatchers("/swagger-ui/**").permitAll()
+                        .requestMatchers("/v3/api-docs/**").permitAll()
+
+                        // ÇALIŞMAZSA DENEYİN - BROADER PATTERNS
+                        .requestMatchers("/**/auth/**").permitAll()
+                        .requestMatchers("/**/test/**").permitAll()
+                        .requestMatchers("/**/public/**").permitAll()
 
                         // Admin endpoints - sadece SUPER_ADMIN
                         .requestMatchers("/api/v1/admin/**").hasRole("SUPER_ADMIN")
 
-                        // Company management - SUPER_ADMIN ve MANAGER
+                        // Company management
                         .requestMatchers("/api/v1/companies/**").hasAnyRole("SUPER_ADMIN", "MANAGER")
 
                         // User management
@@ -163,35 +177,34 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.PUT, "/api/v1/users/**").hasAnyRole("SUPER_ADMIN", "MANAGER")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/users/**").hasRole("SUPER_ADMIN")
 
-                        // Customer management - tüm authenticated kullanıcılar
+                        // Customer management
                         .requestMatchers("/api/v1/customers/**").authenticated()
 
-                        // Ticket management - role-based access control
+                        // Ticket management
                         .requestMatchers(HttpMethod.GET, "/api/v1/tickets/**").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/tickets/**").authenticated()
                         .requestMatchers(HttpMethod.PUT, "/api/v1/tickets/**").hasAnyRole("SUPER_ADMIN", "MANAGER", "AGENT")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/tickets/**").hasAnyRole("SUPER_ADMIN", "MANAGER")
 
-                        // Dashboard ve analytics - authenticated kullanıcılar
+                        // Dashboard ve analytics
                         .requestMatchers("/api/v1/dashboard/**").authenticated()
                         .requestMatchers("/api/v1/analytics/**").hasAnyRole("SUPER_ADMIN", "MANAGER")
 
-                        // Reports - SUPER_ADMIN ve MANAGER
+                        // Reports
                         .requestMatchers("/api/v1/reports/**").hasAnyRole("SUPER_ADMIN", "MANAGER")
 
-                        // Knowledge base - tüm authenticated kullanıcılar okuyabilir
+                        // Knowledge base
                         .requestMatchers(HttpMethod.GET, "/api/v1/knowledge-base/**").authenticated()
                         .requestMatchers(HttpMethod.POST, "/api/v1/knowledge-base/**").hasAnyRole("SUPER_ADMIN", "MANAGER", "AGENT")
                         .requestMatchers(HttpMethod.PUT, "/api/v1/knowledge-base/**").hasAnyRole("SUPER_ADMIN", "MANAGER", "AGENT")
                         .requestMatchers(HttpMethod.DELETE, "/api/v1/knowledge-base/**").hasAnyRole("SUPER_ADMIN", "MANAGER")
 
-                        // Diğer tüm API endpoints authentication gerektir
+                        // Diğer tüm API endpoints - EN SONDA OLMALI
                         .requestMatchers("/api/**").authenticated()
 
-                        // Geri kalan her şey için authentication gerekli
-                        .anyRequest().authenticated()
+                        // Geri kalan her şey
+                        .anyRequest().permitAll()
                 )
-
                 // Authentication provider'ı ekle
                 .authenticationProvider(authenticationProvider())
 

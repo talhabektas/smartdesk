@@ -95,19 +95,65 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     /**
      * Bu filter'ın çalışmayacağı endpoint'leri belirler
      */
+    /**
+     * Bu filter'ın çalışmayacağı endpoint'leri belirler
+     */
+    /**
+     * Bu filter'ın çalışmayacağı endpoint'leri belirler
+     */
+    /**
+     * Bu filter'ın çalışmayacağı endpoint'leri belirler
+     */
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) throws ServletException {
         String path = request.getRequestURI();
+        String method = request.getMethod();
 
-        // Public endpoint'ler için filter'ı atla
-        return path.startsWith("/api/v1/auth/") ||
-                path.startsWith("/api/v1/public/") ||
-                path.startsWith("/actuator/") ||
-                path.startsWith("/health/") ||
-                path.startsWith("/swagger-ui/") ||
-                path.startsWith("/v3/api-docs/") ||
-                path.equals("/swagger-ui.html") ||
-                path.startsWith("/swagger-resources/") ||
-                path.startsWith("/webjars/");
+        logger.debug("Checking JWT filter for path: {} method: {}", path, method);
+
+        // OPTIONS requests için filter'ı atla (CORS preflight)
+        if ("OPTIONS".equals(method)) {
+            logger.debug("Skipping JWT filter for OPTIONS request");
+            return true;
+        }
+
+        // Public endpoint'ler - EXACT MATCH
+        boolean shouldSkip =
+                // Ana endpoints
+                path.equals("/api/") ||
+                        path.equals("/api/health") ||
+                        path.equals("/api/info") ||
+                        path.equals("/") ||
+                        path.equals("/health") ||
+                        path.equals("/info") ||
+
+                        // Auth endpoints
+                        path.equals("/api/v1/auth/health") ||
+                        path.equals("/api/v1/auth/login") ||
+                        path.equals("/api/v1/auth/register") ||
+                        path.equals("/api/v1/auth/refresh") ||
+                        path.equals("/api/v1/auth/logout") ||
+                        path.equals("/api/v1/auth/forgot-password") ||
+                        path.equals("/api/v1/auth/reset-password") ||
+                        path.equals("/api/v1/auth/verify-email") ||
+                        path.equals("/api/v1/auth/validate-token") ||
+
+                        // Test endpoints
+                        path.equals("/api/v1/test/public") ||
+                        path.equals("/api/v1/test/security") ||
+                        path.equals("/api/v1/test/info") ||
+
+                        // Prefix matches
+                        path.startsWith("/api/v1/public/") ||
+                        path.startsWith("/api/actuator/") ||
+                        path.startsWith("/actuator/");
+
+        if (shouldSkip) {
+            logger.debug("Skipping JWT filter for public path: {}", path);
+        } else {
+            logger.debug("JWT filter will process path: {}", path);
+        }
+
+        return shouldSkip;
     }
 }

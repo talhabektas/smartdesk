@@ -23,9 +23,14 @@ import java.util.Map;
  * Authentication ve Authorization işlemleri için REST Controller
  * Login, Register, Token Refresh, Password Reset operations
  */
+
 @RestController
 @RequestMapping("/api/v1/auth")
-@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:3001"})
+@CrossOrigin(
+        origins = "*",
+        allowedHeaders = "*",
+        methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE, RequestMethod.OPTIONS}
+)
 public class AuthController {
 
     private static final Logger logger = LoggerFactory.getLogger(AuthController.class);
