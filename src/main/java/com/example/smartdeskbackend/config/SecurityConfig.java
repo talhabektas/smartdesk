@@ -62,13 +62,7 @@ public class SecurityConfig {
     /**
      * DAO Authentication Provider
      */
-    @Bean
-    public DaoAuthenticationProvider authenticationProvider() {
-        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
-        authProvider.setUserDetailsService(userDetailsService);
-        authProvider.setPasswordEncoder(passwordEncoder());
-        return authProvider;
-    }
+
 
     /**
      * CORS yapılandırması
@@ -205,8 +199,7 @@ public class SecurityConfig {
                         // Geri kalan her şey
                         .anyRequest().permitAll()
                 )
-                // Authentication provider'ı ekle
-                .authenticationProvider(authenticationProvider())
+
 
                 // JWT filter'ı ekle
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
