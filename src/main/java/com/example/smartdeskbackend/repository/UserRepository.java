@@ -54,7 +54,6 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
 
     // ============ Company-based Queries ============
 
-
     /**
      * Şirkete ait kullanıcıları bulma
      */
@@ -146,7 +145,7 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
                            Pageable pageable);
 
     /**
-     * Multiple criteria ile kullanıcı arama
+     * String parametrelerle kullanıcı filtreleme (Native query)
      */
     @Query(value = "SELECT * FROM users u WHERE u.company_id = :companyId " +
             "AND (:role IS NULL OR u.role = :role) " +
@@ -159,11 +158,25 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
                     "AND (:departmentId IS NULL OR u.department_id = :departmentId) " +
                     "AND u.status != 'DELETED'",
             nativeQuery = true)
-    Page<User> findUsersWithFilters(@Param("companyId") Long companyId,
-                                    @Param("role") String role,
-                                    @Param("status") String status,
-                                    @Param("departmentId") Long departmentId,
-                                    Pageable pageable);
+    Page<User> findUsersWithStringFilters(@Param("companyId") Long companyId,
+                                          @Param("role") String role,
+                                          @Param("status") String status,
+                                          @Param("departmentId") Long departmentId,
+                                          Pageable pageable);
+
+    /**
+     * Enum parametrelerle kullanıcı filtreleme
+     */
+    @Query("SELECT u FROM User u WHERE u.company.id = :companyId " +
+            "AND (:role IS NULL OR u.role = :role) " +
+            "AND (:status IS NULL OR u.status = :status) " +
+            "AND (:departmentId IS NULL OR u.department.id = :departmentId) " +
+            "AND u.status != 'DELETED'")
+    Page<User> findUsersWithEnumFilters(@Param("companyId") Long companyId,
+                                        @Param("role") UserRole role,
+                                        @Param("status") UserStatus status,
+                                        @Param("departmentId") Long departmentId,
+                                        Pageable pageable);
 
     // ============ Statistics Queries ============
 
@@ -312,20 +325,5 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
      */
     default List<User> findByDepartmentIdAndRole(Long departmentId, UserRole role) {
         return findByDepartmentIdAndRole(departmentId, role.getCode());
-    }
-
-    /**
-     * Multiple filters için enum-safe versiyon
-     */
-    default Page<User> findUsersWithFilters(Long companyId, UserRole role,
-                                            UserStatus status, Long departmentId,
-                                            Pageable pageable) {
-        return findUsersWithFilters(
-                companyId,
-                role != null ? role.getCode() : null,
-                status != null ? status.getCode() : null,
-                departmentId,
-                pageable
-        );
     }
 }

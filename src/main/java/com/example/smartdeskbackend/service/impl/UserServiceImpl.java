@@ -85,7 +85,14 @@ public class UserServiceImpl implements UserService {
             throw new ResourceNotFoundException("Company not found with id: " + companyId);
         }
 
-        Page<User> users = userRepository.findUsersWithFilters(companyId, null, null, null, pageable);
+        // String parametreli metodu kullan
+        Page<User> users = userRepository.findUsersWithStringFilters(
+                companyId,
+                null,  // role as String
+                null,  // status as String
+                null,  // departmentId
+                pageable
+        );
         return users.map(this::mapToListResponse);
     }
 
@@ -99,16 +106,17 @@ public class UserServiceImpl implements UserService {
             return userRepository.searchUsers(companyId, searchTerm.trim(), pageable)
                     .map(this::mapToListResponse);
         } else {
-            // Belirsizliği gidermek için enum'ların String kodlarını açıkça geçiyoruz.
-            return userRepository.findUsersWithFilters(
+            // String parametreli metodu kullan
+            return userRepository.findUsersWithStringFilters(
                     companyId,
-                    role != null ? role.getCode() : null,     // UserRole.AGENT.getCode() gibi String karşılığını kullan
-                    status != null ? status.getCode() : null, // UserStatus.ACTIVE.getCode() gibi String karşılığını kullan
+                    role != null ? role.getCode() : null,     // String versiyonunu kullan
+                    status != null ? status.getCode() : null, // String versiyonunu kullan
                     departmentId,
                     pageable
             ).map(this::mapToListResponse);
         }
     }
+
     @Override
     @Transactional(readOnly = true)
     public List<UserListResponse> getAgentsByDepartment(Long departmentId) {
@@ -336,25 +344,17 @@ public class UserServiceImpl implements UserService {
 
     @Override
     @Transactional(readOnly = true)
-    public Page<UserListResponse> getUsersByCompany(Long companyId, Pageable pageable) {
-        logger.debug("Getting users by company: {}", companyId);
-
-        // Company existence kontrolü
-        if (!companyRepository.existsById(companyId)) {
-            throw new ResourceNotFoundException("Company not found with id: " + companyId);
-        }
-
-        // Rol, status ve departmentId null olarak geçilerek tüm kullanıcılar filtrelenebilir.
-        // Bu metodun amacı şirketteki tüm kullanıcıları getirmek olduğundan, filtreleri boş bırakıyoruz.
-        Page<User> users = userRepository.findUsersWithFilters(companyId, null, null, null, pageable);
-        return users.map(this::mapToListResponse);
-    }
-    @Override
-    @Transactional(readOnly = true)
     public long getUserCountByCompany(Long companyId) {
         logger.debug("Getting user count for company: {}", companyId);
         return userRepository.countByCompanyId(companyId);
     }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Object[]> getUserStatsByCompany(Long companyId) {
+        return userRepository.countUsersByRoleAndCompany(companyId);
+    }
+
     @Override
     @Transactional(readOnly = true)
     public List<UserListResponse> getMostActiveUsers(Long companyId, int limit) {
@@ -443,4 +443,3 @@ public class UserServiceImpl implements UserService {
         return response;
     }
 }
-

@@ -62,7 +62,13 @@ public class SecurityConfig {
     /**
      * DAO Authentication Provider
      */
-
+    @Bean
+    public DaoAuthenticationProvider authenticationProvider() {
+        DaoAuthenticationProvider authProvider = new DaoAuthenticationProvider();
+        authProvider.setUserDetailsService(userDetailsService);
+        authProvider.setPasswordEncoder(passwordEncoder());
+        return authProvider;
+    }
 
     /**
      * CORS yapılandırması
@@ -110,9 +116,6 @@ public class SecurityConfig {
     /**
      * Security filter chain yapılandırması
      */
-    /**
-     * Security filter chain yapılandırması
-     */
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
         http
@@ -130,7 +133,9 @@ public class SecurityConfig {
                 .exceptionHandling(exceptions ->
                         exceptions.authenticationEntryPoint(jwtAuthenticationEntryPoint))
 
-                // Authorization rules - SIRALAMA ÇOK ÖNEMLİ!
+                // Authentication provider'ı ayarla
+                .authenticationProvider(authenticationProvider())
+
                 // Authorization rules - SIRALAMA ÇOK ÖNEMLİ!
                 .authorizeHttpRequests(authz -> authz
                         // OPTIONS requests - CORS preflight için - EN BAŞTA OLMALI
@@ -199,7 +204,6 @@ public class SecurityConfig {
                         // Geri kalan her şey
                         .anyRequest().permitAll()
                 )
-
 
                 // JWT filter'ı ekle
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
