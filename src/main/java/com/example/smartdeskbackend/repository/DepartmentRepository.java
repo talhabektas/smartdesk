@@ -1,4 +1,3 @@
-
 // DepartmentRepository.java
 package com.example.smartdeskbackend.repository;
 
@@ -37,9 +36,12 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
     /**
      * Departman performans istatistikleri
      */
-    @Query("SELECT d.name, COUNT(t.id), AVG(CASE WHEN t.resolvedAt IS NOT NULL " +
-            "THEN TIMESTAMPDIFF(HOUR, t.createdAt, t.resolvedAt) END) " +
-            "FROM Department d LEFT JOIN Ticket t ON d.id = t.department.id " +
-            "WHERE d.company.id = :companyId GROUP BY d.id, d.name")
+    @Query(value = "SELECT d.name, COUNT(t.id), " +
+            "AVG(CASE WHEN t.resolved_at IS NOT NULL " +
+            "    THEN TIMESTAMPDIFF(HOUR, t.created_at, t.resolved_at) ELSE 0 END) AS avgResolutionTime " +
+            "FROM departments d " +
+            "LEFT JOIN tickets t ON d.id = t.department_id " +
+            "WHERE d.company_id = :companyId " +
+            "GROUP BY d.id, d.name", nativeQuery = true)
     List<Object[]> getDepartmentStats(@Param("companyId") Long companyId);
 }

@@ -1,4 +1,3 @@
-
 // TicketRepository.java
 package com.example.smartdeskbackend.repository;
 
@@ -58,13 +57,13 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
      * Aktif ticketlar (NEW, OPEN, IN_PROGRESS, PENDING)
      */
     @Query("SELECT t FROM Ticket t WHERE t.company.id = :companyId " +
-            "AND t.status IN ('NEW', 'OPEN', 'IN_PROGRESS', 'PENDING') " +
+            "AND t.status IN (com.example.smartdeskbackend.enums.TicketStatus.NEW, " +
+            "com.example.smartdeskbackend.enums.TicketStatus.OPEN, " +
+            "com.example.smartdeskbackend.enums.TicketStatus.IN_PROGRESS, " +
+            "com.example.smartdeskbackend.enums.TicketStatus.PENDING) " +
             "ORDER BY t.priority DESC, t.createdAt ASC")
     Page<Ticket> findActiveTickets(@Param("companyId") Long companyId, Pageable pageable);
 
-    /**
-     * Atanmamış ticketlar
-     */
     /**
      * Agent'a atanmış ticket sayısı
      */
@@ -82,8 +81,12 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
      */
     @Query("SELECT COUNT(t) FROM Ticket t WHERE t.company.id = :companyId")
     long countByCompanyId(@Param("companyId") Long companyId);
+
+    /**
+     * Atanmamış ticketlar
+     */
     @Query("SELECT t FROM Ticket t WHERE t.company.id = :companyId " +
-            "AND t.assignedAgent IS NULL AND t.status = 'NEW' " +
+            "AND t.assignedAgent IS NULL AND t.status = com.example.smartdeskbackend.enums.TicketStatus.NEW " +
             "ORDER BY t.priority DESC, t.createdAt ASC")
     List<Ticket> findUnassignedTickets(@Param("companyId") Long companyId);
 
@@ -92,7 +95,8 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
      */
     @Query("SELECT t FROM Ticket t WHERE t.company.id = :companyId " +
             "AND t.slaDeadline IS NOT NULL AND t.slaDeadline < :riskTime " +
-            "AND t.status NOT IN ('RESOLVED', 'CLOSED') " +
+            "AND t.status NOT IN (com.example.smartdeskbackend.enums.TicketStatus.RESOLVED, " +
+            "com.example.smartdeskbackend.enums.TicketStatus.CLOSED) " +
             "ORDER BY t.slaDeadline ASC")
     List<Ticket> findTicketsAtRiskOfSlaViolation(@Param("companyId") Long companyId,
                                                  @Param("riskTime") LocalDateTime riskTime);
@@ -161,18 +165,21 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
                                          @Param("endDate") LocalDateTime endDate);
 
     /**
-     * Agent performans metrikleri
+     * Agent performans metrikleri (NATIVE SORGUNUZ İÇİN YENİ DÜZENLEME)
      */
-    @Query("SELECT t.assignedAgent.id, t.assignedAgent.firstName, t.assignedAgent.lastName, " +
+    @Query(value = "SELECT u.id, u.first_name, u.last_name, " +
             "COUNT(t.id) as ticketCount, " +
-            "AVG(CASE WHEN t.resolvedAt IS NOT NULL " +
-            "    THEN TIMESTAMPDIFF(HOUR, t.createdAt, t.resolvedAt) END) as avgResolutionTime, " +
+            "AVG(CASE WHEN t.resolved_at IS NOT NULL " +
+            "    THEN CAST(TIMESTAMPDIFF(HOUR, t.created_at, t.resolved_at) AS DECIMAL(10, 2)) ELSE 0 END) as avgResolutionTime, " + // CAST ve ELSE 0 eklendi, DECIMAL(10,2) daha uygun olabilir.
             "COUNT(CASE WHEN t.status = 'RESOLVED' THEN 1 END) as resolvedCount " +
-            "FROM Ticket t WHERE t.company.id = :companyId " +
-            "AND t.assignedAgent IS NOT NULL " +
-            "AND (:startDate IS NULL OR t.createdAt >= :startDate) " +
-            "AND (:endDate IS NULL OR t.createdAt <= :endDate) " +
-            "GROUP BY t.assignedAgent.id, t.assignedAgent.firstName, t.assignedAgent.lastName")
+            "FROM tickets t " +
+            "JOIN users u ON t.assigned_agent_id = u.id " + // 'agents a' yerine 'users u' olarak düzeltildi
+            "WHERE t.company_id = :companyId " +
+            "AND u.role IN ('AGENT', 'MANAGER') " + // Sadece agent ve manager rolleri dikkate alındı
+            "AND u.status = 'ACTIVE' " + // Sadece aktif kullanıcılar
+            "AND (:startDate IS NULL OR t.created_at >= :startDate) " +
+            "AND (:endDate IS NULL OR t.created_at <= :endDate) " +
+            "GROUP BY u.id, u.first_name, u.last_name", nativeQuery = true) // GROUP BY da u.id kullanıldı
     List<Object[]> getAgentPerformanceMetrics(@Param("companyId") Long companyId,
                                               @Param("startDate") LocalDateTime startDate,
                                               @Param("endDate") LocalDateTime endDate);
