@@ -73,14 +73,12 @@ public class ReportServiceImpl implements ReportService {
         }
         */
         System.out.println("PDF raporu oluşturma mantığı burada çalışacak: " + reportType);
-        return new byte[0]; // Şimdilik boş byte dizisi
+        return new byte[0];
     }
 
     @Override
     public byte[] generateExcelReport(Long companyId, String reportType, LocalDate startDate, LocalDate endDate) {
-        // BURADA EXCEL RAPORU OLUŞTURMA İŞ MANTIĞI YER ALACAKTIR.
-        // Bu genellikle Apache POI gibi kütüphanelerin kullanılmasını gerektirir.
-        // Örneğin:
+
         /*
         try (Workbook workbook = new XSSFWorkbook(); ByteArrayOutputStream baos = new ByteArrayOutputStream()) {
             Sheet sheet = workbook.createSheet(reportType + " Raporu");

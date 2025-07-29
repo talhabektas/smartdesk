@@ -1,4 +1,3 @@
-// src/main/java/com/example/smartdeskbackend/service/impl/NotificationServiceImpl.java
 package com.example.smartdeskbackend.service.impl;
 
 import com.example.smartdeskbackend.entity.Company;
@@ -37,17 +36,16 @@ public class NotificationServiceImpl implements NotificationService {
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Company not found with id: " + companyId));
 
-        // Kullanıcının gerçekten şirkete ait olup olmadığını kontrol et
         if (!recipient.getCompany().getId().equals(companyId)) {
             throw new BusinessLogicException("Recipient user does not belong to the specified company.");
         }
 
         notification.setRecipientUser(recipient);
         notification.setCompany(company);
-        notification.setRead(false); // Yeni bildirimler okunmadı olarak işaretlenir
+        notification.setRead(false);
         notification.setSentAt(LocalDateTime.now());
-        notification.setCreatedAt(LocalDateTime.now());
-        notification.setUpdatedAt(LocalDateTime.now());
+        notification.setCreatedAt(LocalDateTime.now()); // AuditableEntity'den miras alınan metod
+        notification.setUpdatedAt(LocalDateTime.now()); // AuditableEntity'den miras alınan metod
         return notificationRepository.save(notification);
     }
 
@@ -57,13 +55,12 @@ public class NotificationServiceImpl implements NotificationService {
         Notification notification = notificationRepository.findById(notificationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Notification not found with id: " + notificationId));
 
-        // Bildirimin ilgili kullanıcıya ait olup olmadığını kontrol et
         if (!notification.getRecipientUser().getId().equals(userId)) {
             throw new BusinessLogicException("You are not authorized to mark this notification as read.");
         }
 
         notification.setRead(true);
-        notification.setUpdatedAt(LocalDateTime.now());
+        notification.setUpdatedAt(LocalDateTime.now()); // AuditableEntity'den miras alınan metod
         notificationRepository.save(notification);
     }
 
@@ -88,7 +85,6 @@ public class NotificationServiceImpl implements NotificationService {
         Notification notification = notificationRepository.findById(notificationId)
                 .orElseThrow(() -> new ResourceNotFoundException("Notification not found with id: " + notificationId));
 
-        // Bildirimin ilgili kullanıcıya ait olup olmadığını kontrol et
         if (!notification.getRecipientUser().getId().equals(userId)) {
             throw new BusinessLogicException("You are not authorized to delete this notification.");
         }

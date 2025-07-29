@@ -4,11 +4,11 @@ package com.example.smartdeskbackend.service.impl;
 import com.example.smartdeskbackend.entity.AgentPerformance;
 import com.example.smartdeskbackend.entity.Company;
 import com.example.smartdeskbackend.entity.User;
-import com.example.smartdeskbackend.exception.ResourceNotFoundException;
+import com.example.smartdeskbackend.exception.ResourceNotFoundException; // Bu sınıfın var olduğundan emin olun
 import com.example.smartdeskbackend.repository.AgentPerformanceRepository;
 import com.example.smartdeskbackend.repository.CompanyRepository;
 import com.example.smartdeskbackend.repository.TicketRepository;
-import com.example.smartdeskbackend.repository.UserRepository; // User entity'sine erişim için
+import com.example.smartdeskbackend.repository.UserRepository;
 import com.example.smartdeskbackend.service.AgentPerformanceService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -27,9 +27,9 @@ public class AgentPerformanceServiceImpl implements AgentPerformanceService {
     @Autowired
     private TicketRepository ticketRepository;
     @Autowired
-    private UserRepository userRepository; // Agent (User) bilgilerini almak için
+    private UserRepository userRepository;
     @Autowired
-    private CompanyRepository companyRepository; // Company bilgilerini almak için
+    private CompanyRepository companyRepository;
 
     @Override
     @Transactional
@@ -50,30 +50,14 @@ public class AgentPerformanceServiceImpl implements AgentPerformanceService {
     }
 
     @Override
-    public List<AgentPerformance> getCompanyPerformanceMetrics(Long companyId, LocalDate startDate, LocalDate endDate) {
-        // Bu metot, TicketRepository'deki native sorgudan alınan Object[]'leri işler.
-        // Daha iyi bir yaklaşım, bu Object[]'leri özel bir DTO'ya dönüştürüp döndürmektir.
+    // Bu metodun imzası AgentPerformanceService arayüzündeki ile tam olarak eşleşmeli.
+    public List<Object[]> getCompanyPerformanceMetrics(Long companyId, LocalDate startDate, LocalDate endDate) {
         LocalDateTime startDateTime = startDate.atStartOfDay();
         LocalDateTime endDateTime = endDate.plusDays(1).atStartOfDay().minusNanos(1);
         List<Object[]> rawMetrics = ticketRepository.getAgentPerformanceMetrics(companyId, startDateTime, endDateTime);
 
-        // Bu rawMetrics'i AgentPerformance DTO'larına veya daha anlamlı bir yapıya dönüştürme mantığı eklenebilir.
-        // Şimdilik doğrudan listeyi döndürmek yerine, daha ileriye dönük bir yaklaşımla DTO'ya dönüşümü burada yapmalıyız.
-        // Örnek bir dönüşüm:
-        /*
-        return rawMetrics.stream().map(metric -> {
-            AgentPerformanceDto dto = new AgentPerformanceDto();
-            dto.setAgentId((Long) metric[0]);
-            dto.setAgentFirstName((String) metric[1]);
-            dto.setAgentLastName((String) metric[2]);
-            dto.setTicketCount(((Number) metric[3]).intValue());
-            dto.setAvgResolutionTime(((Number) metric[4]).doubleValue());
-            dto.setResolvedCount(((Number) metric[5]).intValue());
-            return dto;
-        }).collect(Collectors.toList());
-        */
-        // Geçici olarak null dönüyorum, ancak gerçek uygulamada DTO dönüşümü yapılmalı.
-        return null;
+        // Not: Bu ham Object[]'leri daha sonra AgentPerformance DTO'larına dönüştürmeyi düşünebilirsiniz.
+        return rawMetrics;
     }
 
     @Override
@@ -88,16 +72,16 @@ public class AgentPerformanceServiceImpl implements AgentPerformanceService {
 
         for (Object[] metric : agentMetricsRaw) {
             Long agentId = (Long) metric[0];
-            int totalTickets = ((Number) metric[3]).intValue();
-            double avgResolutionTime = ((Number) metric[4]).doubleValue(); // Object tipinden dönüştürme
-            int resolvedCount = ((Number) metric[5]).intValue();
+            // metric[1]: first_name (String), metric[2]: last_name (String)
+            int totalTickets = ((Number) metric[3]).intValue(); // Object'ten int'e güvenli dönüştürme
+            double avgResolutionTime = ((Number) metric[4]).doubleValue(); // Object'ten double'a güvenli dönüştürme
+            int resolvedCount = ((Number) metric[5]).intValue(); // Object'ten int'e güvenli dönüştürme
 
-            // Performans kaydının zaten var olup olmadığını kontrol et (günlük olduğu için)
             Optional<AgentPerformance> existingPerformance = agentPerformanceRepository.findByAgentIdAndReportDate(agentId, date);
             AgentPerformance performance = existingPerformance.orElseGet(AgentPerformance::new);
 
             User agent = userRepository.findById(agentId)
-                    .orElseThrow(() -> new ResourceNotFoundException("Agent not found with id: " + agentId));
+                    .orElseThrow(() -> new ResourceNotFoundException("Agent (User) not found with id: " + agentId));
 
             performance.setAgent(agent);
             performance.setCompany(company);
@@ -105,10 +89,13 @@ public class AgentPerformanceServiceImpl implements AgentPerformanceService {
             performance.setTotalTicketsHandled(totalTickets);
             performance.setAverageResolutionTimeHours(avgResolutionTime);
             performance.setResolvedTickets(resolvedCount);
-            // ReopenedTickets, AverageFirstResponseTimeHours, CustomerSatisfactionScore gibi diğer alanlar da burada hesaplanıp set edilebilir.
+
+            // Eğer istersen, burada yeniden açılan biletler (reopenedTickets) veya
+            // ilk yanıt süresi (averageFirstResponseTimeHours) gibi diğer alanları da
+            // hesaplayıp AgentPerformance entity'sine set edebilirsin.
 
             performance.setUpdatedAt(LocalDateTime.now());
-            if (performance.getId() == null) { // Yeni kayıt ise CreatedAt'i ayarla
+            if (performance.getId() == null) { // Eğer yeni bir kayıt ise createdAt'i ayarla
                 performance.setCreatedAt(LocalDateTime.now());
             }
             agentPerformanceRepository.save(performance);

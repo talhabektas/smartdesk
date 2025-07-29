@@ -1,4 +1,3 @@
-// src/main/java/com/example/smartdeskbackend/service/impl/SlaPolicyServiceImpl.java
 package com.example.smartdeskbackend.service.impl;
 
 import com.example.smartdeskbackend.entity.Company;
@@ -35,7 +34,6 @@ public class SlaPolicyServiceImpl implements SlaPolicyService {
                 .orElseThrow(() -> new ResourceNotFoundException("Company not found with id: " + companyId));
         policy.setCompany(company);
 
-        // Eğer departman belirtilmişse, varlığını ve şirkete aitliğini doğrula
         if (policy.getDepartment() != null && policy.getDepartment().getId() != null) {
             Department department = departmentRepository.findById(policy.getDepartment().getId())
                     .orElseThrow(() -> new ResourceNotFoundException("Department not found with id: " + policy.getDepartment().getId()));
@@ -44,17 +42,15 @@ public class SlaPolicyServiceImpl implements SlaPolicyService {
             }
             policy.setDepartment(department);
         } else {
-            policy.setDepartment(null); // Departman belirtilmemişse veya kaldırılmışsa null ayarla
+            policy.setDepartment(null);
         }
 
-        // Aynı şirket, departman ve öncelik için zaten bir SLA politikası var mı kontrol et
         Optional<SlaPolicy> existingPolicy = slaPolicyRepository.findByCompanyIdAndAppliesToPriorityAndDepartmentId(
                 companyId, policy.getAppliesToPriority(), policy.getDepartment() != null ? policy.getDepartment().getId() : null
         );
         if (existingPolicy.isPresent()) {
             throw new IllegalArgumentException("An SLA policy for this company, department and priority already exists.");
         }
-
 
         policy.setCreatedAt(LocalDateTime.now());
         policy.setUpdatedAt(LocalDateTime.now());
@@ -67,9 +63,6 @@ public class SlaPolicyServiceImpl implements SlaPolicyService {
         SlaPolicy policy = slaPolicyRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("SLA Policy not found with id: " + id));
 
-        // Şirket kontrolü: Politika güncelleyen kullanıcının politikanın ait olduğu şirkete yetkisi olmalı.
-        // Bu güvenlik katmanında veya daha üst seviye bir servis metodunda yapılmalı.
-
         policy.setName(policyDetails.getName());
         policy.setDescription(policyDetails.getDescription());
         policy.setAppliesToPriority(policyDetails.getAppliesToPriority());
@@ -78,7 +71,6 @@ public class SlaPolicyServiceImpl implements SlaPolicyService {
         policy.setBusinessHoursOnly(policyDetails.isBusinessHoursOnly());
         policy.setActive(policyDetails.isActive());
 
-        // Departman güncelleniyorsa, varlığını ve aynı şirkete aitliğini doğrula
         if (policyDetails.getDepartment() != null && policyDetails.getDepartment().getId() != null) {
             Department department = departmentRepository.findById(policyDetails.getDepartment().getId())
                     .orElseThrow(() -> new ResourceNotFoundException("Department not found with id: " + policyDetails.getDepartment().getId()));
@@ -100,33 +92,28 @@ public class SlaPolicyServiceImpl implements SlaPolicyService {
         if (!slaPolicyRepository.existsById(id)) {
             throw new ResourceNotFoundException("SLA Policy not found with id: " + id);
         }
-        // Bu SLA politikasına bağlı SLA takipleri (SlaTracking) varsa ne yapılacağı burada düşünülmeli
-        // Örneğin, ilgili SlaTracking kayıtlarını güncelle/sil veya silmeye izin verme
         slaPolicyRepository.deleteById(id);
     }
 
     @Override
     public Optional<SlaPolicy> getSlaPolicyById(Long id, Long companyId) {
         return slaPolicyRepository.findById(id)
-                .filter(p -> p.getCompany().getId().equals(companyId)); // Multi-tenant filtreleme
+                .filter(p -> p.getCompany().getId().equals(companyId));
     }
 
     @Override
     public List<SlaPolicy> getAllSlaPolicies(Long companyId) {
-        return slaPolicyRepository.findByCompanyId(companyId); // Multi-tenant filtreleme
+        return slaPolicyRepository.findByCompanyId(companyId);
     }
 
     @Override
     public Optional<SlaPolicy> getApplicableSlaPolicy(Long companyId, Long departmentId, TicketPriority priority) {
-        // En spesifik SLA politikasını bulma sırası:
-        // 1. Şirket, belirli departman ve belirli öncelik için
         if (departmentId != null) {
             Optional<SlaPolicy> policy = slaPolicyRepository.findByCompanyIdAndAppliesToPriorityAndDepartmentId(companyId, priority, departmentId);
             if (policy.isPresent()) {
                 return policy;
             }
         }
-        // 2. Şirket, herhangi bir departman (null) ve belirli öncelik için (genel SLA)
         return slaPolicyRepository.findByCompanyIdAndAppliesToPriorityAndDepartmentId(companyId, priority, null);
     }
 }
