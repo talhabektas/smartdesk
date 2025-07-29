@@ -54,6 +54,7 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
 
     // ============ Company-based Queries ============
 
+
     /**
      * Şirkete ait kullanıcıları bulma
      */

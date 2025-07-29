@@ -61,7 +61,8 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     @Query("SELECT c FROM Customer c WHERE c.company.id = :companyId " +
             "AND c.segment = 'VIP' AND c.isActive = true")
     List<Customer> findVipCustomers(@Param("companyId") Long companyId);
-
+    @Query("SELECT COUNT(c) FROM Customer c WHERE c.company.id = :companyId AND c.isActive = true")
+    long countByCompanyId(@Param("companyId") Long companyId);
     /**
      * Son iletişim tarihine göre müşteriler
      */

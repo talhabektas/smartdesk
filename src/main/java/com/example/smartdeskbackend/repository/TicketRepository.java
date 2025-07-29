@@ -65,6 +65,23 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
     /**
      * Atanmamış ticketlar
      */
+    /**
+     * Agent'a atanmış ticket sayısı
+     */
+    @Query("SELECT COUNT(t) FROM Ticket t WHERE t.assignedAgent.id = :agentId")
+    long countByAssignedAgentId(@Param("agentId") Long agentId);
+
+    /**
+     * Müşterinin ticket sayısı
+     */
+    @Query("SELECT COUNT(t) FROM Ticket t WHERE t.customer.id = :customerId")
+    long countByCustomerId(@Param("customerId") Long customerId);
+
+    /**
+     * Şirketteki toplam ticket sayısı
+     */
+    @Query("SELECT COUNT(t) FROM Ticket t WHERE t.company.id = :companyId")
+    long countByCompanyId(@Param("companyId") Long companyId);
     @Query("SELECT t FROM Ticket t WHERE t.company.id = :companyId " +
             "AND t.assignedAgent IS NULL AND t.status = 'NEW' " +
             "ORDER BY t.priority DESC, t.createdAt ASC")
