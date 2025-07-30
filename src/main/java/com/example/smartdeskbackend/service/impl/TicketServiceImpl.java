@@ -1,5 +1,7 @@
 package com.example.smartdeskbackend.service.impl;
 
+import com.example.smartdeskbackend.controller.WebSocketMessageController;
+import com.example.smartdeskbackend.dto.NotificationDTO;
 import com.example.smartdeskbackend.dto.request.ticket.*;
 import com.example.smartdeskbackend.dto.response.ticket.*;
 import com.example.smartdeskbackend.entity.*;
@@ -61,6 +63,10 @@ public class TicketServiceImpl implements TicketService {
 
     @Autowired
     private EmailService emailService;
+
+    // WebSocket Controller enjekte edildi
+    @Autowired
+    private WebSocketMessageController webSocketMessageController;
 
     // ============ TEMEL CRUD OPERASYONLARI ============
 
@@ -228,6 +234,9 @@ public class TicketServiceImpl implements TicketService {
         // History kaydı oluştur
         createHistoryRecord(ticket, null, "CREATED", "Ticket created", creatorUser);
 
+        // WebSocket bildirimi gönder - Yeni ticket oluşturuldu
+        sendTicketCreationNotifications(ticket);
+
         // Email notification gönder
         try {
             emailService.sendTicketNotification(ticket, "CREATED");
@@ -282,6 +291,9 @@ public class TicketServiceImpl implements TicketService {
         ticket.updateActivity();
         ticket = ticketRepository.save(ticket);
 
+        // WebSocket bildirimi gönder - Ticket güncellendi
+        sendTicketUpdateNotifications(ticket);
+
         logger.info("Ticket updated successfully: {}", id);
         return mapToDetailResponse(ticket);
     }
@@ -308,6 +320,9 @@ public class TicketServiceImpl implements TicketService {
         createHistoryRecord(ticket, "status", oldStatus.getCode(), newStatus.getCode(), user);
 
         ticket = ticketRepository.save(ticket);
+
+        // WebSocket bildirimi gönder - Durum değişikliği
+        sendTicketStatusChangeNotifications(ticket, oldStatus, newStatus);
 
         // Email notification gönder
         try {
@@ -344,6 +359,9 @@ public class TicketServiceImpl implements TicketService {
                 agent.getFullName(), null);
 
         ticket = ticketRepository.save(ticket);
+
+        // WebSocket bildirimi gönder - Ticket atandı
+        sendTicketAssignmentNotifications(ticket);
 
         // Email notification gönder
         try {
@@ -382,6 +400,9 @@ public class TicketServiceImpl implements TicketService {
 
         ticket = ticketRepository.save(ticket);
 
+        // WebSocket bildirimi gönder - Otomatik atama
+        sendTicketAssignmentNotifications(ticket);
+
         logger.info("Ticket auto-assigned successfully to: {}", selectedAgent.getFullName());
         return mapToDetailResponse(ticket);
     }
@@ -406,6 +427,9 @@ public class TicketServiceImpl implements TicketService {
         createHistoryRecord(ticket, "priority", oldPriority.getCode(), newPriority.getCode(), user);
 
         ticket = ticketRepository.save(ticket);
+
+        // WebSocket bildirimi gönder - Öncelik değişikliği
+        sendTicketPriorityChangeNotifications(ticket, oldPriority, newPriority);
 
         logger.info("Ticket priority changed successfully: {} -> {}", oldPriority, newPriority);
         return mapToDetailResponse(ticket);
@@ -433,6 +457,9 @@ public class TicketServiceImpl implements TicketService {
 
         ticket = ticketRepository.save(ticket);
 
+        // WebSocket bildirimi gönder - Ticket escalate edildi
+        sendTicketEscalationNotifications(ticket, oldEscalationLevel);
+
         // Email notification gönder
         try {
             emailService.sendTicketNotification(ticket, "ESCALATED");
@@ -457,12 +484,16 @@ public class TicketServiceImpl implements TicketService {
         }
 
         ticket.setResolutionSummary(resolutionSummary);
+        TicketStatus oldStatus = ticket.getStatus();
         ticket.updateStatus(TicketStatus.CLOSED, user);
 
         // History kaydı oluştur
-        createHistoryRecord(ticket, "status", ticket.getStatus().getCode(), "CLOSED", user);
+        createHistoryRecord(ticket, "status", oldStatus.getCode(), "CLOSED", user);
 
         ticket = ticketRepository.save(ticket);
+
+        // WebSocket bildirimi gönder - Ticket kapatıldı
+        sendTicketClosureNotifications(ticket);
 
         // Email notification gönder
         try {
@@ -500,6 +531,9 @@ public class TicketServiceImpl implements TicketService {
         ticket.updateActivity();
         ticketRepository.save(ticket);
 
+        // WebSocket bildirimi gönder - Yeni yorum eklendi
+        sendTicketCommentNotifications(ticket, comment);
+
         logger.info("Comment added successfully to ticket: {}", ticketId);
         return mapToCommentResponse(comment);
     }
@@ -525,7 +559,15 @@ public class TicketServiceImpl implements TicketService {
         logger.info("Adding attachment to ticket: {}", ticketId);
 
         try {
-            return fileService.uploadTicketAttachment(file, ticketId, userId);
+            String filePath = fileService.uploadTicketAttachment(file, ticketId, userId);
+
+            // WebSocket bildirimi gönder - Dosya eklendi
+            Ticket ticket = ticketRepository.findById(ticketId).orElse(null);
+            if (ticket != null) {
+                sendTicketAttachmentNotifications(ticket, file.getOriginalFilename());
+            }
+
+            return filePath;
         } catch (Exception e) {
             logger.error("Failed to add attachment to ticket: {}", ticketId, e);
             throw new BusinessLogicException("Failed to upload attachment: " + e.getMessage());
@@ -545,6 +587,9 @@ public class TicketServiceImpl implements TicketService {
 
         ticket.addSatisfactionRating(rating, feedback);
         ticketRepository.save(ticket);
+
+        // WebSocket bildirimi gönder - Müşteri değerlendirmesi eklendi
+        sendCustomerSatisfactionNotifications(ticket, rating, feedback);
 
         logger.info("Satisfaction rating added successfully to ticket: {}", ticketId);
     }
@@ -614,7 +659,419 @@ public class TicketServiceImpl implements TicketService {
         return ticketRepository.getDailyTicketCreationTrend(companyId, startDate);
     }
 
+    // ============ WEBSOCKET BİLDİRİM METODLARı ============
+
+    /**
+     * Yeni ticket oluşturulduğunda bildirim gönder
+     */
+    private void sendTicketCreationNotifications(Ticket ticket) {
+        try {
+            // Departman yöneticilerine bildirim gönder
+            if (ticket.getDepartment() != null) {
+                List<User> managers = userRepository.findByDepartmentIdAndRole(
+                        ticket.getDepartment().getId(), UserRole.MANAGER);
+
+                for (User manager : managers) {
+                    NotificationDTO notification = new NotificationDTO(
+                            "Yeni ticket oluşturuldu: #" + ticket.getTicketNumber(),
+                            "TICKET_CREATED",
+                            "/tickets/" + ticket.getId()
+                    );
+                    webSocketMessageController.sendPrivateNotification(
+                            manager.getEmail(), notification);
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to send ticket creation notification: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Ticket güncellendiğinde bildirim gönder
+     */
+    private void sendTicketUpdateNotifications(Ticket ticket) {
+        try {
+            // Agent'a bildirim gönder
+            if (ticket.getAssignedAgent() != null) {
+                NotificationDTO agentNotification = new NotificationDTO(
+                        "Ticket #" + ticket.getTicketNumber() + " güncellendi.",
+                        "TICKET_UPDATE",
+                        "/tickets/" + ticket.getId()
+                );
+                webSocketMessageController.sendPrivateNotification(
+                        ticket.getAssignedAgent().getEmail(),
+                        agentNotification
+                );
+            }
+
+            // Müşteriye bildirim gönder
+            if (ticket.getCustomer() != null) {
+                NotificationDTO customerNotification = new NotificationDTO(
+                        "Ticket #" + ticket.getTicketNumber() + " güncellendi.",
+                        "TICKET_UPDATE",
+                        "/customer/tickets/" + ticket.getId()
+                );
+                webSocketMessageController.sendPrivateNotification(
+                        ticket.getCustomer().getEmail(),
+                        customerNotification
+                );
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to send ticket update notification: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Ticket atandığında bildirim gönder
+     */
+    private void sendTicketAssignmentNotifications(Ticket ticket) {
+        try {
+            // Yeni atanan agent'a bildirim
+            if (ticket.getAssignedAgent() != null) {
+                NotificationDTO notification = new NotificationDTO(
+                        "Size yeni bir ticket atandı: #" + ticket.getTicketNumber(),
+                        "TICKET_ASSIGNED",
+                        "/tickets/" + ticket.getId()
+                );
+                webSocketMessageController.sendPrivateNotification(
+                        ticket.getAssignedAgent().getEmail(),
+                        notification
+                );
+            }
+
+            // Müşteriye de bildirim
+            if (ticket.getCustomer() != null) {
+                NotificationDTO customerNotification = new NotificationDTO(
+                        "Ticket #" + ticket.getTicketNumber() + " bir temsilciye atandı.",
+                        "TICKET_ASSIGNED",
+                        "/customer/tickets/" + ticket.getId()
+                );
+                webSocketMessageController.sendPrivateNotification(
+                        ticket.getCustomer().getEmail(),
+                        customerNotification
+                );
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to send ticket assignment notification: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Ticket durumu değiştiğinde bildirim gönder
+     */
+    private void sendTicketStatusChangeNotifications(Ticket ticket, TicketStatus oldStatus, TicketStatus newStatus) {
+        try {
+            String statusMessage = getStatusChangeMessage(oldStatus, newStatus);
+
+            // Agent'a bildirim
+            if (ticket.getAssignedAgent() != null) {
+                NotificationDTO notification = new NotificationDTO(
+                        "Ticket #" + ticket.getTicketNumber() + " " + statusMessage,
+                        "TICKET_STATUS_CHANGE",
+                        "/tickets/" + ticket.getId()
+                );
+                webSocketMessageController.sendPrivateNotification(
+                        ticket.getAssignedAgent().getEmail(),
+                        notification
+                );
+            }
+
+            // Müşteriye bildirim
+            if (ticket.getCustomer() != null) {
+                NotificationDTO customerNotification = new NotificationDTO(
+                        "Ticket #" + ticket.getTicketNumber() + " " + statusMessage,
+                        "TICKET_STATUS_CHANGE",
+                        "/customer/tickets/" + ticket.getId()
+                );
+                webSocketMessageController.sendPrivateNotification(
+                        ticket.getCustomer().getEmail(),
+                        customerNotification
+                );
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to send ticket status change notification: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Ticket önceliği değiştiğinde bildirim gönder
+     */
+    private void sendTicketPriorityChangeNotifications(Ticket ticket, TicketPriority oldPriority, TicketPriority newPriority) {
+        try {
+            String priorityMessage = getPriorityChangeMessage(oldPriority, newPriority);
+
+            // Agent'a bildirim
+            if (ticket.getAssignedAgent() != null) {
+                NotificationDTO notification = new NotificationDTO(
+                        "Ticket #" + ticket.getTicketNumber() + " önceliği " + priorityMessage,
+                        "TICKET_PRIORITY_CHANGE",
+                        "/tickets/" + ticket.getId()
+                );
+                webSocketMessageController.sendPrivateNotification(
+                        ticket.getAssignedAgent().getEmail(),
+                        notification
+                );
+            }
+
+            // Yüksek öncelikli ticketlar için yöneticilere de bildirim
+            if (newPriority == TicketPriority.HIGH || newPriority == TicketPriority.CRITICAL) {
+                sendHighPriorityNotificationToManagers(ticket, newPriority);
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to send ticket priority change notification: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Ticket escalate edildiğinde bildirim gönder
+     */
+    private void sendTicketEscalationNotifications(Ticket ticket, int oldLevel) {
+        try {
+            // Agent'a bildirim
+            if (ticket.getAssignedAgent() != null) {
+                NotificationDTO notification = new NotificationDTO(
+                        "Ticket #" + ticket.getTicketNumber() + " escalate edildi (Seviye: " + ticket.getEscalationLevel() + ")",
+                        "TICKET_ESCALATED",
+                        "/tickets/" + ticket.getId()
+                );
+                webSocketMessageController.sendPrivateNotification(
+                        ticket.getAssignedAgent().getEmail(),
+                        notification
+                );
+            }
+
+            // Yöneticilere escalation bildirimi
+            if (ticket.getDepartment() != null) {
+                List<User> managers = userRepository.findByDepartmentIdAndRole(
+                        ticket.getDepartment().getId(), UserRole.MANAGER);
+
+                for (User manager : managers) {
+                    NotificationDTO notification = new NotificationDTO(
+                            "Ticket #" + ticket.getTicketNumber() + " escalate edildi! Acil müdahale gerekli.",
+                            "TICKET_ESCALATED",
+                            "/tickets/" + ticket.getId()
+                    );
+                    webSocketMessageController.sendPrivateNotification(
+                            manager.getEmail(), notification);
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to send ticket escalation notification: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Ticket kapatıldığında bildirim gönder
+     */
+    private void sendTicketClosureNotifications(Ticket ticket) {
+        try {
+            // Müşteriye bildirim
+            if (ticket.getCustomer() != null) {
+                NotificationDTO customerNotification = new NotificationDTO(
+                        "Ticket #" + ticket.getTicketNumber() + " çözüldü ve kapatıldı. Memnuniyetinizi değerlendirmeyi unutmayın!",
+                        "TICKET_CLOSED",
+                        "/customer/tickets/" + ticket.getId()
+                );
+                webSocketMessageController.sendPrivateNotification(
+                        ticket.getCustomer().getEmail(),
+                        customerNotification
+                );
+            }
+
+            // Agent'a bildirim
+            if (ticket.getAssignedAgent() != null) {
+                NotificationDTO agentNotification = new NotificationDTO(
+                        "Ticket #" + ticket.getTicketNumber() + " başarıyla kapatıldı.",
+                        "TICKET_CLOSED",
+                        "/tickets/" + ticket.getId()
+                );
+                webSocketMessageController.sendPrivateNotification(
+                        ticket.getAssignedAgent().getEmail(),
+                        agentNotification
+                );
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to send ticket closure notification: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Ticket'a yorum eklendiğinde bildirim gönder
+     */
+    private void sendTicketCommentNotifications(Ticket ticket, TicketComment comment) {
+        try {
+            // Internal comment değilse müşteriye bildirim gönder
+            if (!comment.getIsInternal() && ticket.getCustomer() != null) {
+                NotificationDTO customerNotification = new NotificationDTO(
+                        "Ticket #" + ticket.getTicketNumber() + " için yeni yanıt geldi.",
+                        "TICKET_COMMENT",
+                        "/customer/tickets/" + ticket.getId()
+                );
+                webSocketMessageController.sendPrivateNotification(
+                        ticket.getCustomer().getEmail(),
+                        customerNotification
+                );
+            }
+
+            // Agent'a bildirim (eğer yorum yazan agent değilse)
+            if (ticket.getAssignedAgent() != null &&
+                    !ticket.getAssignedAgent().getId().equals(comment.getAuthor().getId())) {
+                NotificationDTO agentNotification = new NotificationDTO(
+                        "Ticket #" + ticket.getTicketNumber() + " için yeni yorum eklendi.",
+                        "TICKET_COMMENT",
+                        "/tickets/" + ticket.getId()
+                );
+                webSocketMessageController.sendPrivateNotification(
+                        ticket.getAssignedAgent().getEmail(),
+                        agentNotification
+                );
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to send ticket comment notification: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Ticket'a dosya eklendiğinde bildirim gönder
+     */
+    private void sendTicketAttachmentNotifications(Ticket ticket, String fileName) {
+        try {
+            // Agent'a bildirim
+            if (ticket.getAssignedAgent() != null) {
+                NotificationDTO notification = new NotificationDTO(
+                        "Ticket #" + ticket.getTicketNumber() + " için yeni dosya eklendi: " + fileName,
+                        "TICKET_ATTACHMENT",
+                        "/tickets/" + ticket.getId()
+                );
+                webSocketMessageController.sendPrivateNotification(
+                        ticket.getAssignedAgent().getEmail(),
+                        notification
+                );
+            }
+
+            // Müşteriye bildirim
+            if (ticket.getCustomer() != null) {
+                NotificationDTO customerNotification = new NotificationDTO(
+                        "Ticket #" + ticket.getTicketNumber() + " için yeni dosya eklendi.",
+                        "TICKET_ATTACHMENT",
+                        "/customer/tickets/" + ticket.getId()
+                );
+                webSocketMessageController.sendPrivateNotification(
+                        ticket.getCustomer().getEmail(),
+                        customerNotification
+                );
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to send ticket attachment notification: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Müşteri memnuniyet değerlendirmesi eklendiğinde bildirim gönder
+     */
+    private void sendCustomerSatisfactionNotifications(Ticket ticket, int rating, String feedback) {
+        try {
+            String ratingText = getRatingText(rating);
+
+            // Agent'a bildirim
+            if (ticket.getAssignedAgent() != null) {
+                NotificationDTO notification = new NotificationDTO(
+                        "Ticket #" + ticket.getTicketNumber() + " için müşteri değerlendirmesi: " + ratingText + " (" + rating + "/5)",
+                        "CUSTOMER_FEEDBACK",
+                        "/tickets/" + ticket.getId()
+                );
+                webSocketMessageController.sendPrivateNotification(
+                        ticket.getAssignedAgent().getEmail(),
+                        notification
+                );
+            }
+
+            // Düşük puanlarda yöneticilere bildirim
+            if (rating <= 2 && ticket.getDepartment() != null) {
+                List<User> managers = userRepository.findByDepartmentIdAndRole(
+                        ticket.getDepartment().getId(), UserRole.MANAGER);
+
+                for (User manager : managers) {
+                    NotificationDTO notification = new NotificationDTO(
+                            "UYARI: Ticket #" + ticket.getTicketNumber() + " düşük müşteri puanı aldı: " + rating + "/5",
+                            "LOW_SATISFACTION",
+                            "/tickets/" + ticket.getId()
+                    );
+                    webSocketMessageController.sendPrivateNotification(
+                            manager.getEmail(), notification);
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to send customer satisfaction notification: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Yüksek öncelikli ticketlar için yöneticilere bildirim gönder
+     */
+    private void sendHighPriorityNotificationToManagers(Ticket ticket, TicketPriority priority) {
+        try {
+            if (ticket.getDepartment() != null) {
+                List<User> managers = userRepository.findByDepartmentIdAndRole(
+                        ticket.getDepartment().getId(), UserRole.MANAGER);
+
+                for (User manager : managers) {
+                    NotificationDTO notification = new NotificationDTO(
+                            "YÜKSEK ÖNCELİK: Ticket #" + ticket.getTicketNumber() + " - " + priority.getDisplayName(),
+                            "HIGH_PRIORITY_TICKET",
+                            "/tickets/" + ticket.getId()
+                    );
+                    webSocketMessageController.sendPrivateNotification(
+                            manager.getEmail(), notification);
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Failed to send high priority notification to managers: {}", e.getMessage());
+        }
+    }
+
     // ============ HELPER METHODS ============
+
+    /**
+     * Durum değişikliği mesajını oluştur
+     */
+    private String getStatusChangeMessage(TicketStatus oldStatus, TicketStatus newStatus) {
+        switch (newStatus) {
+            case OPEN:
+                return "açıldı.";
+            case IN_PROGRESS:
+                return "işleme alındı.";
+            case PENDING:
+                return "beklemede.";
+            case RESOLVED:
+                return "çözüldü.";
+            case CLOSED:
+                return "kapatıldı.";
+            default:
+                return "durumu güncellendi.";
+        }
+    }
+
+    /**
+     * Öncelik değişikliği mesajını oluştur
+     */
+    private String getPriorityChangeMessage(TicketPriority oldPriority, TicketPriority newPriority) {
+        return oldPriority.getDisplayName() + " -> " + newPriority.getDisplayName() + " olarak değiştirildi.";
+    }
+
+    /**
+     * Rating puanını metne çevir
+     */
+    private String getRatingText(int rating) {
+        switch (rating) {
+            case 1: return "Çok Kötü";
+            case 2: return "Kötü";
+            case 3: return "Orta";
+            case 4: return "İyi";
+            case 5: return "Mükemmel";
+            default: return "Bilinmeyen";
+        }
+    }
 
     /**
      * Ticket history kaydı oluşturur
@@ -630,7 +1087,6 @@ public class TicketServiceImpl implements TicketService {
 
         ticketHistoryRepository.save(history);
     }
-
 
     private TicketResponse mapToResponse(Ticket ticket) {
         TicketResponse response = new TicketResponse();

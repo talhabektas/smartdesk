@@ -91,6 +91,7 @@ public class SecurityConfig {
         source.registerCorsConfiguration("/api/**", configuration);
         return source;
     }
+
     @Bean
     public JwtAuthenticationFilter jwtAuthenticationFilter(JwtUtil jwtUtil, UserDetailsService userDetailsService) {
         return new JwtAuthenticationFilter(jwtUtil, userDetailsService);
@@ -105,7 +106,7 @@ public class SecurityConfig {
      * Security filter chain yapılandırması
      */
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, MvcRequestMatcher.Builder mvc, JwtUtil jwtUtil) throws Exception { // BURAYA "JwtUtil jwtUtil" PARAMETRESİ EKLENDİ!
+    public SecurityFilterChain filterChain(HttpSecurity http, MvcRequestMatcher.Builder mvc, JwtUtil jwtUtil) throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
@@ -124,6 +125,9 @@ public class SecurityConfig {
                         .requestMatchers(mvc.pattern("/api/v1/test/**")).permitAll()
                         .requestMatchers(mvc.pattern("/api/v1/companies/domain/**")).permitAll()
                         .requestMatchers(mvc.pattern("/api/v1/files/download/**")).permitAll()
+
+                        // WebSocket endpoint'ine izin ver (public olmalı)
+                        .requestMatchers(mvc.pattern("/ws/**")).permitAll()
 
                         .requestMatchers(mvc.pattern("/swagger-ui/**")).permitAll()
                         .requestMatchers(mvc.pattern("/v3/api-docs/**")).permitAll()
@@ -152,7 +156,7 @@ public class SecurityConfig {
                         .requestMatchers(mvc.pattern("/api/**")).authenticated()
                         .anyRequest().permitAll()
                 )
-                .addFilterBefore(jwtAuthenticationFilter(jwtUtil, userDetailsService()), UsernamePasswordAuthenticationFilter.class); // jwtUtil'i buraya verdik.
+                .addFilterBefore(jwtAuthenticationFilter(jwtUtil, userDetailsService()), UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }
