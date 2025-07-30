@@ -20,7 +20,7 @@ import java.util.function.Function;
  * JWT Token işlemlerini yöneten utility sınıfı
  * Token oluşturma, doğrulama ve claim extraction işlemleri
  */
-@Component
+@Component // Bu anotasyonun olduğundan emin olun!
 public class JwtUtil {
 
     private static final Logger logger = LoggerFactory.getLogger(JwtUtil.class);
