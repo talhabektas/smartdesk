@@ -121,26 +121,22 @@ npm start
 The system comes with pre-configured users for testing:
 
 ### Super Admin
-- **Email:** admin@smartdesk.com
-- **Password:** admin123
+
 - **Role:** SUPER_ADMIN
 - **Permissions:** Full system access
 
 ### Manager
-- **Email:** manager@smartdesk.com
-- **Password:** manager123
+
 - **Role:** MANAGER
 - **Permissions:** Company and user management
 
 ### Agent
-- **Email:** agent@smartdesk.com
-- **Password:** agent123
+
 - **Role:** AGENT
 - **Permissions:** Ticket and customer management
 
 ### Customer
-- **Email:** customer@smartdesk.com
-- **Password:** customer123
+
 - **Role:** CUSTOMER
 - **Permissions:** View own tickets and profile
 
