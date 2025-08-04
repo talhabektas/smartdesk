@@ -19,7 +19,7 @@ import java.util.Map;
  * Sadece SUPER_ADMIN erişimi
  */
 @RestController
-@RequestMapping("/api/v1/admin")
+@RequestMapping("/v1/admin")
 @CrossOrigin(origins = {"http://localhost:3000", "http://localhost:3001"})
 @PreAuthorize("hasRole('SUPER_ADMIN')")
 public class AdminController {

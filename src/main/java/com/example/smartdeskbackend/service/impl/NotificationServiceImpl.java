@@ -32,7 +32,8 @@ public class NotificationServiceImpl implements NotificationService {
     @Transactional
     public Notification createNotification(Notification notification, Long recipientUserId, Long companyId) {
         User recipient = userRepository.findById(recipientUserId)
-                .orElseThrow(() -> new ResourceNotFoundException("Recipient user not found with id: " + recipientUserId));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Recipient user not found with id: " + recipientUserId));
         Company company = companyRepository.findById(companyId)
                 .orElseThrow(() -> new ResourceNotFoundException("Company not found with id: " + companyId));
 
@@ -71,12 +72,12 @@ public class NotificationServiceImpl implements NotificationService {
 
     @Override
     public List<Notification> getUnreadNotificationsForUser(Long userId) {
-        return notificationRepository.findByRecipientUserIdAndReadFalse(userId);
+        return notificationRepository.findByRecipientUserIdAndIsReadFalse(userId);
     }
 
     @Override
     public long countUnreadNotificationsForUser(Long userId) {
-        return notificationRepository.countByRecipientUserIdAndReadFalse(userId);
+        return notificationRepository.countByRecipientUserIdAndIsReadFalse(userId);
     }
 
     @Override

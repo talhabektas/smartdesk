@@ -24,7 +24,7 @@ import java.util.Map;
  * Company management REST Controller
  */
 @RestController
-@RequestMapping("/api/v1/companies")
+@RequestMapping("/v1/companies")
 @CrossOrigin(origins = {"http://localhost:3000", "http://localhost:3001"})
 public class CompanyController {
 

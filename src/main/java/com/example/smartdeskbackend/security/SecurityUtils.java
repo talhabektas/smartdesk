@@ -49,10 +49,8 @@ public class SecurityUtils {
 
         if (authentication != null && authentication.getAuthorities() != null) {
             return authentication.getAuthorities().stream()
-                    .anyMatch(grantedAuthority ->
-                            grantedAuthority.getAuthority().equals("ROLE_" + role) ||
-                                    grantedAuthority.getAuthority().equals(role)
-                    );
+                    .anyMatch(grantedAuthority -> grantedAuthority.getAuthority().equals("ROLE_" + role) ||
+                            grantedAuthority.getAuthority().equals(role));
         }
 
         return false;
@@ -89,5 +87,41 @@ public class SecurityUtils {
         }
 
         return Optional.empty();
+    }
+
+    /**
+     * Current user email'ini döndürür
+     */
+    public static String getCurrentUserEmail() {
+        return getCurrentUserLogin().orElse(null);
+    }
+
+    /**
+     * Current user role'unu döndürür
+     */
+    public static String getCurrentUserRole() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+
+        if (authentication != null && authentication.getAuthorities() != null) {
+            return authentication.getAuthorities().stream()
+                    .map(grantedAuthority -> grantedAuthority.getAuthority())
+                    .filter(authority -> authority.startsWith("ROLE_"))
+                    .map(authority -> authority.substring(5)) // Remove "ROLE_" prefix
+                    .findFirst()
+                    .orElse(null);
+        }
+
+        return null;
+    }
+
+    /**
+     * Current user company ID'sini döndürür (JWT token'dan alınır)
+     * Not: Bu method JWT utility ile implement edilmeli
+     */
+    public static Long getCurrentUserCompanyId() {
+        // Bu method JWT token'dan company ID'yi extract etmek için
+        // JwtUtil ile implement edilmeli. Şimdilik null dönüyoruz.
+        // Gerçek implementasyon için JwtUtil dependency'si gerekli.
+        return null;
     }
 }

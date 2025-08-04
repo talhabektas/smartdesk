@@ -34,7 +34,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
     public UserDetails loadUserByUsername(String email) throws UsernameNotFoundException {
         logger.debug("Loading user by email: {}", email);
 
-        User user = userRepository.findByEmailAndIsActiveTrue(email)
+        User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> {
                     logger.error("User not found with email: {}", email);
                     return new UsernameNotFoundException("User not found with email: " + email);
@@ -61,7 +61,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
                 user.canLogin(), // enabled
                 !user.isAccountLocked(), // account non locked
                 true, // credentials non expired
-                user.isActive(), // account non expired
+                user.canLogin(), // account non expired (use canLogin instead of isActive)
                 authorities
         );
     }

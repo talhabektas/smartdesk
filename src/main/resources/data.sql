@@ -29,19 +29,19 @@ INSERT IGNORE INTO departments (id, company_id, name, description, email, is_act
 -- Şifreler: "password123" (BCrypt encoded)
 INSERT IGNORE INTO users (id, company_id, department_id, email, password_hash, first_name, last_name, phone, role, status, email_verified, login_attempts, created_at, updated_at) VALUES
 -- Super Admin
-(1, 1, NULL, 'admin@erdemir.com.tr', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqfcXVdcXvN4YtyrkHdvEZ2', 'System', 'Administrator', '+90 372 316 1001', 'SUPER_ADMIN', 'ACTIVE', TRUE, 0, NOW(), NOW()),
+(1, 1, NULL, 'admin@erdemir.com.tr', '$2a$12$Tb5hvqw5eudWgVWBCyjv7u8rZ37KS55/zqi10GCk0qwy2rtdVN5e.', 'System', 'Administrator', '+90 372 316 1001', 'SUPER_ADMIN', 'ACTIVE', TRUE, 0, NOW(), NOW()),
 
 -- Managers
-(2, 1, 1, 'mehmet.yilmaz@erdemir.com.tr', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqfcXVdcXvN4YtyrkHdvEZ2', 'Mehmet', 'Yılmaz', '+90 372 316 1002', 'MANAGER', 'ACTIVE', TRUE, 0, NOW(), NOW()),
-(3, 1, 2, 'ayse.demir@erdemir.com.tr', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqfcXVdcXvN4YtyrkHdvEZ2', 'Ayşe', 'Demir', '+90 372 316 1003', 'MANAGER', 'ACTIVE', TRUE, 0, NOW(), NOW()),
-(4, 2, 4, 'john.smith@techcorp.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqfcXVdcXvN4YtyrkHdvEZ2', 'John', 'Smith', '+1 555 0124', 'MANAGER', 'ACTIVE', TRUE, 0, NOW(), NOW()),
+(2, 1, 1, 'mehmet.yilmaz@erdemir.com.tr', '$2a$12$Tb5hvqw5eudWgVWBCyjv7u8rZ37KS55/zqi10GCk0qwy2rtdVN5e.', 'Mehmet', 'Yılmaz', '+90 372 316 1002', 'MANAGER', 'ACTIVE', TRUE, 0, NOW(), NOW()),
+(3, 1, 2, 'ayse.demir@erdemir.com.tr', '$2a$12$Tb5hvqw5eudWgVWBCyjv7u8rZ37KS55/zqi10GCk0qwy2rtdVN5e.', 'Ayşe', 'Demir', '+90 372 316 1003', 'MANAGER', 'ACTIVE', TRUE, 0, NOW(), NOW()),
+(4, 2, 4, 'john.smith@techcorp.com', '$2a$12$Tb5hvqw5eudWgVWBCyjv7u8rZ37KS55/zqi10GCk0qwy2rtdVN5e.', 'John', 'Smith', '+1 555 0124', 'MANAGER', 'ACTIVE', TRUE, 0, NOW(), NOW()),
 
 -- Agents
-(5, 1, 1, 'ali.kaya@erdemir.com.tr', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqfcXVdcXvN4YtyrkHdvEZ2', 'Ali', 'Kaya', '+90 372 316 1004', 'AGENT', 'ACTIVE', TRUE, 0, NOW(), NOW()),
-(6, 1, 1, 'fatma.ozturk@erdemir.com.tr', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqfcXVdcXvN4YtyrkHdvEZ2', 'Fatma', 'Öztürk', '+90 372 316 1005', 'AGENT', 'ACTIVE', TRUE, 0, NOW(), NOW()),
-(7, 1, 2, 'can.arslan@erdemir.com.tr', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqfcXVdcXvN4YtyrkHdvEZ2', 'Can', 'Arslan', '+90 372 316 1006', 'AGENT', 'ACTIVE', TRUE, 0, NOW(), NOW()),
-(8, 2, 4, 'sarah.johnson@techcorp.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqfcXVdcXvN4YtyrkHdvEZ2', 'Sarah', 'Johnson', '+1 555 0125', 'AGENT', 'ACTIVE', TRUE, 0, NOW(), NOW()),
-(9, 2, 5, 'mike.davis@techcorp.com', '$2a$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqfcXVdcXvN4YtyrkHdvEZ2', 'Mike', 'Davis', '+1 555 0126', 'AGENT', 'ACTIVE', TRUE, 0, NOW(), NOW());
+(5, 1, 1, 'ali.kaya@erdemir.com.tr', '$2a$12$Tb5hvqw5eudWgVWBCyjv7u8rZ37KS55/zqi10GCk0qwy2rtdVN5e.', 'Ali', 'Kaya', '+90 372 316 1004', 'AGENT', 'ACTIVE', TRUE, 0, NOW(), NOW()),
+(6, 1, 1, 'fatma.ozturk@erdemir.com.tr', '$2a$12$Tb5hvqw5eudWgVWBCyjv7u8rZ37KS55/zqi10GCk0qwy2rtdVN5e.', 'Fatma', 'Öztürk', '+90 372 316 1005', 'AGENT', 'ACTIVE', TRUE, 0, NOW(), NOW()),
+(7, 1, 2, 'can.arslan@erdemir.com.tr', '$2a$12$Tb5hvqw5eudWgVWBCyjv7u8rZ37KS55/zqi10GCk0qwy2rtdVN5e.', 'Can', 'Arslan', '+90 372 316 1006', 'AGENT', 'ACTIVE', TRUE, 0, NOW(), NOW()),
+(8, 2, 4, 'sarah.johnson@techcorp.com', '$2a$12$Tb5hvqw5eudWgVWBCyjv7u8rZ37KS55/zqi10GCk0qwy2rtdVN5e.', 'Sarah', 'Johnson', '+1 555 0125', 'AGENT', 'ACTIVE', TRUE, 0, NOW(), NOW()),
+(9, 2, 5, 'mike.davis@techcorp.com', '$2a$12$Tb5hvqw5eudWgVWBCyjv7u8rZ37KS55/zqi10GCk0qwy2rtdVN5e.', 'Mike', 'Davis', '+1 555 0126', 'AGENT', 'ACTIVE', TRUE, 0, NOW(), NOW());
 
 -- 4. Manager atamalarını güncelle
 UPDATE departments SET manager_id = 2 WHERE id = 1;

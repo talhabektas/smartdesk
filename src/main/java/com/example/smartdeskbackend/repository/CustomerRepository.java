@@ -33,9 +33,19 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     List<Customer> findByCompanyId(Long companyId);
 
     /**
+     * Şirketteki aktif müşteriler (pagination ile)
+     */
+    Page<Customer> findByCompanyIdAndIsActiveTrue(Long companyId, Pageable pageable);
+
+    /**
      * Şirketteki aktif müşteriler
      */
     List<Customer> findByCompanyIdAndIsActiveTrue(Long companyId);
+
+    /**
+     * Tüm aktif müşteriler (pagination ile)
+     */
+    Page<Customer> findByIsActiveTrue(Pageable pageable);
 
     /**
      * Segment'e göre müşteriler
@@ -43,7 +53,7 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     List<Customer> findByCompanyIdAndSegment(Long companyId, CustomerSegment segment);
 
     /**
-     * Müşteri arama
+     * Müşteri arama (belirli şirkette)
      */
     @Query("SELECT c FROM Customer c WHERE c.company.id = :companyId " +
             "AND (LOWER(c.firstName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) " +
@@ -54,6 +64,18 @@ public interface CustomerRepository extends JpaRepository<Customer, Long> {
     Page<Customer> searchCustomers(@Param("companyId") Long companyId,
                                    @Param("searchTerm") String searchTerm,
                                    Pageable pageable);
+
+    /**
+     * Müşteri arama (tüm şirketlerde)
+     */
+    @Query("SELECT c FROM Customer c WHERE " +
+            "(LOWER(c.firstName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) " +
+            "OR LOWER(c.lastName) LIKE LOWER(CONCAT('%', :searchTerm, '%')) " +
+            "OR LOWER(c.email) LIKE LOWER(CONCAT('%', :searchTerm, '%')) " +
+            "OR LOWER(c.companyName) LIKE LOWER(CONCAT('%', :searchTerm, '%'))) " +
+            "AND c.isActive = true")
+    Page<Customer> searchAllCustomers(@Param("searchTerm") String searchTerm,
+                                     Pageable pageable);
 
     /**
      * VIP müşteriler

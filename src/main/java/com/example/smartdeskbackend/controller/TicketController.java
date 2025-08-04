@@ -30,7 +30,7 @@ import java.util.Map;
  * Ticket management REST Controller
  */
 @RestController
-@RequestMapping("/api/v1/tickets")
+@RequestMapping("/v1/tickets")
 @CrossOrigin(origins = {"http://localhost:3000", "http://localhost:3001"})
 public class TicketController {
 
@@ -321,14 +321,20 @@ public class TicketController {
             @Valid @RequestBody CreateTicketRequest request,
             HttpServletRequest httpRequest) {
 
-        logger.info("Creating new ticket: {}", request.getTitle());
+        logger.info("🎫 Creating new ticket: {}", request.getTitle());
+        logger.info("🎫 Ticket creation request details: title={}, companyId={}, customerId={}, departmentId={}, priority={}", 
+            request.getTitle(), request.getCompanyId(), request.getCustomerId(), 
+            request.getDepartmentId(), request.getPriority());
 
         try {
             // Company access kontrolü
+            logger.info("🔍 Checking company access for companyId: {}", request.getCompanyId());
             if (!hasAccessToCompany(httpRequest, request.getCompanyId())) {
+                logger.warn("❌ Access denied for companyId: {}", request.getCompanyId());
                 return ResponseEntity.status(HttpStatus.FORBIDDEN)
                         .body(createErrorResponse("ACCESS_DENIED", "Access denied to create ticket in this company"));
             }
+            logger.info("✅ Company access granted for companyId: {}", request.getCompanyId());
 
             // Creator user ID'sini token'dan al (eğer belirtilmemişse)
             if (request.getCreatorUserId() == null) {
@@ -816,16 +822,34 @@ public class TicketController {
     private boolean hasAccessToCompany(HttpServletRequest request, Long companyId) {
         try {
             String token = extractTokenFromRequest(request);
-            if (token == null) return false;
+            logger.info("🔍 Debug hasAccessToCompany - token exists: {}", token != null);
+            
+            if (token == null) {
+                logger.warn("⚠️ No token found in request");
+                return false;
+            }
 
             String role = jwtUtil.getRoleFromToken(token);
-            if ("SUPER_ADMIN".equals(role)) return true;
-
             Long userCompanyId = jwtUtil.getCompanyIdFromToken(token);
-            return companyId.equals(userCompanyId);
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            String email = jwtUtil.getEmailFromToken(token);
+            
+            logger.info("🔍 Debug hasAccessToCompany - Details: userId={}, email={}, role={}, userCompanyId={}, requestedCompanyId={}", 
+                userId, email, role, userCompanyId, companyId);
+            
+            if ("SUPER_ADMIN".equals(role)) {
+                logger.info("✅ SUPER_ADMIN access granted");
+                return true;
+            }
+
+            boolean hasAccess = companyId.equals(userCompanyId);
+            logger.info("🔍 Company access check result: userCompanyId={} == requestedCompanyId={} = {}", 
+                userCompanyId, companyId, hasAccess);
+            
+            return hasAccess;
 
         } catch (Exception e) {
-            logger.error("Error checking company access", e);
+            logger.error("❌ Error checking company access", e);
             return false;
         }
     }

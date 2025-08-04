@@ -22,7 +22,7 @@ import java.util.Map;
  * Dashboard verileri ve istatistikler için
  */
 @RestController
-@RequestMapping("/api/v1/dashboard")
+@RequestMapping("/v1/dashboard")
 @CrossOrigin(origins = {"http://localhost:3000", "http://localhost:3001"})
 public class DashboardController {
 

@@ -16,18 +16,20 @@ public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
      */
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
+        System.out.println("🔌 WebSocket: Registering STOMP endpoints...");
         registry.addEndpoint("/ws")
                 .setAllowedOriginPatterns("http://localhost:*", "https://*.smartdesk.com")
                 .withSockJS();
+        System.out.println("✅ WebSocket: STOMP endpoint '/ws' registered with SockJS support");
     }
 
 
     @Override
     public void configureMessageBroker(MessageBrokerRegistry config) {
+        System.out.println("🔌 WebSocket: Configuring message broker...");
         config.enableSimpleBroker("/topic", "/user");
-
         config.setApplicationDestinationPrefixes("/app");
-
         config.setUserDestinationPrefix("/user");
+        System.out.println("✅ WebSocket: Message broker configured with prefixes: /topic, /user, /app");
     }
 }

@@ -64,6 +64,15 @@ public class CustomerServiceImpl implements CustomerService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<CustomerResponse> getAllCustomers(Pageable pageable) {
+        logger.debug("Getting all customers with pagination");
+        
+        Page<Customer> customers = customerRepository.findByIsActiveTrue(pageable);
+        return customers.map(this::mapToResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<CustomerResponse> getCustomersByCompany(Long companyId, Pageable pageable) {
         logger.debug("Getting customers by company: {}", companyId);
 
@@ -72,9 +81,8 @@ public class CustomerServiceImpl implements CustomerService {
             throw new ResourceNotFoundException("Company not found with id: " + companyId);
         }
 
-        List<Customer> customers = customerRepository.findByCompanyIdAndIsActiveTrue(companyId);
-        // Convert to Page manually since we need active customers only
-        return Page.empty(pageable);
+        Page<Customer> customers = customerRepository.findByCompanyIdAndIsActiveTrue(companyId, pageable);
+        return customers.map(this::mapToResponse);
     }
 
     @Override
@@ -83,6 +91,15 @@ public class CustomerServiceImpl implements CustomerService {
         logger.debug("Searching customers in company: {} with term: {}", companyId, searchTerm);
 
         Page<Customer> customers = customerRepository.searchCustomers(companyId, searchTerm, pageable);
+        return customers.map(this::mapToResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<CustomerResponse> searchAllCustomers(String searchTerm, Pageable pageable) {
+        logger.debug("Searching all customers with term: {}", searchTerm);
+
+        Page<Customer> customers = customerRepository.searchAllCustomers(searchTerm, pageable);
         return customers.map(this::mapToResponse);
     }
 
@@ -208,7 +225,14 @@ public class CustomerServiceImpl implements CustomerService {
         response.setFullName(customer.getFullName());
         response.setSegment(customer.getSegment().getCode());
         response.setSegmentDisplayName(customer.getSegment().getDisplayName());
-        response.setCompanyName(customer.getCompanyName());
+        
+        // Gerçek şirket adını Company entity'den al
+        if (customer.getCompany() != null) {
+            response.setCompanyName(customer.getCompany().getName());
+        } else {
+            response.setCompanyName(customer.getCompanyName()); // fallback
+        }
+        
         response.setIsActive(customer.getIsActive());
         response.setLastContact(customer.getLastContact());
         response.setCreatedAt(customer.getCreatedAt());

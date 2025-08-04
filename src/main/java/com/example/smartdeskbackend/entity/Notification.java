@@ -19,7 +19,8 @@ public class Notification extends AuditableEntity {
     private String message;
     private String type;
     private String targetUrl;
-    private boolean read;
+    @Column(name = "is_read", nullable = false)
+    private boolean isRead = false;
     private LocalDateTime sentAt;
 
     @ManyToOne(fetch = FetchType.LAZY)

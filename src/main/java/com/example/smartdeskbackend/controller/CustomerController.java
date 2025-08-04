@@ -29,7 +29,7 @@ import java.util.Map;
  * Customer management REST Controller
  */
 @RestController
-@RequestMapping("/api/v1/customers")
+@RequestMapping("/v1/customers")
 @CrossOrigin(origins = {"http://localhost:3000", "http://localhost:3001"})
 public class CustomerController {
 
@@ -40,6 +40,60 @@ public class CustomerController {
 
     @Autowired
     private JwtUtil jwtUtil;
+
+    /**
+     * Tüm customerları listele (pagination ve search ile)
+     */
+    @GetMapping
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('AGENT')")
+    public ResponseEntity<?> getAllCustomers(
+            @RequestParam(required = false) String search,
+            @PageableDefault(size = 10) Pageable pageable,
+            HttpServletRequest request) {
+
+        logger.info("Getting all customers with pagination - page: {}, size: {}, search: {}", 
+                   pageable.getPageNumber(), pageable.getPageSize(), search);
+
+        try {
+            String token = extractTokenFromRequest(request);
+            String role = jwtUtil.getRoleFromToken(token);
+            
+            Page<CustomerResponse> customers;
+            
+            if ("SUPER_ADMIN".equals(role)) {
+                // SUPER_ADMIN can see all customers across all companies
+                if (search != null && !search.trim().isEmpty()) {
+                    // If SUPER_ADMIN searches, search across all companies
+                    customers = customerService.searchAllCustomers(search.trim(), pageable);
+                } else {
+                    customers = customerService.getAllCustomers(pageable);
+                }
+            } else {
+                // MANAGER/AGENT can only see customers from their company
+                Long userCompanyId = jwtUtil.getCompanyIdFromToken(token);
+                if (userCompanyId == null) {
+                    return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                            .body(createErrorResponse("ACCESS_DENIED", "User company information not found"));
+                }
+                
+                if (search != null && !search.trim().isEmpty()) {
+                    customers = customerService.searchCustomers(userCompanyId, search.trim(), pageable);
+                } else {
+                    customers = customerService.getCustomersByCompany(userCompanyId, pageable);
+                }
+            }
+
+            Map<String, Object> response = createPageResponse(customers);
+            response.put("total", customers.getTotalElements()); // Add total for frontend compatibility
+            
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("Error getting customers", e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(createErrorResponse("CUSTOMERS_FETCH_ERROR", e.getMessage()));
+        }
+    }
 
     /**
      * Customer detaylarını getir

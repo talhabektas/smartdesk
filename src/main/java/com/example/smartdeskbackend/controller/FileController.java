@@ -12,7 +12,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.util.Map;
 
 @RestController
-@RequestMapping("/api/v1/files")
+@RequestMapping("/v1/files")
 public class FileController {
 
     @Autowired

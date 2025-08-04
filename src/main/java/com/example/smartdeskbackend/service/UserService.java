@@ -38,7 +38,7 @@ public interface UserService {
      * Kullanıcı arama ve filtreleme
      */
     Page<UserListResponse> searchUsers(Long companyId, String searchTerm, UserRole role,
-                                       UserStatus status, Long departmentId, Pageable pageable);
+            UserStatus status, Long departmentId, Pageable pageable);
 
     /**
      * Departmandaki agent'ları getir
@@ -109,4 +109,14 @@ public interface UserService {
      * Agent performans istatistikleri
      */
     List<Object[]> getAgentPerformanceStats(Long companyId, LocalDateTime startDate, LocalDateTime endDate);
+
+    /**
+     * Mevcut kullanıcıyı getir (authentication context'ten)
+     */
+    com.example.smartdeskbackend.entity.User getCurrentUser();
+
+    /**
+     * Email ile User entity'sini getir
+     */
+    com.example.smartdeskbackend.entity.User findByEmail(String email);
 }

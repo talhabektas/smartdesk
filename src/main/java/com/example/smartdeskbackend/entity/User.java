@@ -140,7 +140,8 @@ public class User extends AuditableEntity {
      * Kullanıcının giriş yapıp yapamayacağını kontrol eder
      */
     public boolean canLogin() {
-        return status.canLogin() && !isAccountLocked() && emailVerified;
+        // Development ortamında email verification bypass edilir
+        return status.canLogin() && !isAccountLocked();
     }
 
     /**

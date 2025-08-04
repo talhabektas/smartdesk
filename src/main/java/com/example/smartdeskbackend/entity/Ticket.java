@@ -92,6 +92,15 @@ public class Ticket extends AuditableEntity {
     @Column(name = "last_activity_at")
     private LocalDateTime lastActivityAt;
 
+    @Column(name = "last_message_at")
+    private LocalDateTime lastMessageAt;
+
+    @Column(name = "unread_message_count")
+    private Integer unreadMessageCount = 0;
+
+    @Column(name = "chat_enabled")
+    private Boolean chatEnabled = true;
+
     // Relationships
 
     @ManyToOne(fetch = FetchType.LAZY)
@@ -123,6 +132,9 @@ public class Ticket extends AuditableEntity {
     @OneToMany(mappedBy = "ticket", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
     private List<TicketHistory> history = new ArrayList<>();
 
+    @OneToMany(mappedBy = "ticket", cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    private List<ChatMessage> chatMessages = new ArrayList<>();
+
     // Constructors
     public Ticket() {
         super();
@@ -146,7 +158,7 @@ public class Ticket extends AuditableEntity {
         if (this.ticketNumber == null) {
             String dateStr = LocalDateTime.now().toString().substring(0, 10).replace("-", "");
             this.ticketNumber = "TK-" + dateStr + "-" + String.format("%04d",
-                    (int)(Math.random() * 9999) + 1);
+                    (int) (Math.random() * 9999) + 1);
         }
     }
 
@@ -206,10 +218,10 @@ public class Ticket extends AuditableEntity {
      * SLA ihlali kontrolü
      */
     public boolean isSlaBreached() {
-        if (slaDeadline == null) return false;
+        if (slaDeadline == null)
+            return false;
 
-        LocalDateTime checkTime = this.firstResponseAt != null ?
-                this.firstResponseAt : LocalDateTime.now();
+        LocalDateTime checkTime = this.firstResponseAt != null ? this.firstResponseAt : LocalDateTime.now();
 
         return checkTime.isAfter(slaDeadline);
     }
@@ -219,6 +231,35 @@ public class Ticket extends AuditableEntity {
      */
     public void updateActivity() {
         this.lastActivityAt = LocalDateTime.now();
+    }
+
+    /**
+     * Son mesaj zamanını güncelle
+     */
+    public void updateLastMessageTime() {
+        this.lastMessageAt = LocalDateTime.now();
+        this.lastActivityAt = LocalDateTime.now();
+    }
+
+    /**
+     * Okunmamış mesaj sayısını artır
+     */
+    public void incrementUnreadMessageCount() {
+        this.unreadMessageCount = (this.unreadMessageCount == null ? 0 : this.unreadMessageCount) + 1;
+    }
+
+    /**
+     * Okunmamış mesaj sayısını sıfırla
+     */
+    public void resetUnreadMessageCount() {
+        this.unreadMessageCount = 0;
+    }
+
+    /**
+     * Chat'i aktif/pasif yap
+     */
+    public void enableChat(Boolean enabled) {
+        this.chatEnabled = enabled;
     }
 
     /**
@@ -261,15 +302,15 @@ public class Ticket extends AuditableEntity {
     public long getAgeInDays() {
         return java.time.temporal.ChronoUnit.DAYS.between(
                 this.getCreatedAt().toLocalDate(),
-                LocalDateTime.now().toLocalDate()
-        );
+                LocalDateTime.now().toLocalDate());
     }
 
     /**
      * Çözüm süresi (saat cinsinden)
      */
     public Long getResolutionTimeInHours() {
-        if (resolvedAt == null) return null;
+        if (resolvedAt == null)
+            return null;
         return java.time.temporal.ChronoUnit.HOURS.between(getCreatedAt(), resolvedAt);
     }
 
@@ -277,110 +318,313 @@ public class Ticket extends AuditableEntity {
      * İlk yanıt süresi (saat cinsinden)
      */
     public Long getFirstResponseTimeInHours() {
-        if (firstResponseAt == null) return null;
+        if (firstResponseAt == null)
+            return null;
         return java.time.temporal.ChronoUnit.HOURS.between(getCreatedAt(), firstResponseAt);
     }
 
     // Status check methods
-    public boolean isNew() { return status == TicketStatus.NEW; }
-    public boolean isOpen() { return status == TicketStatus.OPEN; }
-    public boolean isInProgress() { return status == TicketStatus.IN_PROGRESS; }
-    public boolean isPending() { return status == TicketStatus.PENDING; }
-    public boolean isResolved() { return status == TicketStatus.RESOLVED; }
-    public boolean isClosed() { return status == TicketStatus.CLOSED; }
-    public boolean isEscalated() { return status == TicketStatus.ESCALATED; }
+    public boolean isNew() {
+        return status == TicketStatus.NEW;
+    }
 
-    public boolean isActive() { return status.isActive(); }
-    public boolean isCompleted() { return status.isClosed(); }
+    public boolean isOpen() {
+        return status == TicketStatus.OPEN;
+    }
+
+    public boolean isInProgress() {
+        return status == TicketStatus.IN_PROGRESS;
+    }
+
+    public boolean isPending() {
+        return status == TicketStatus.PENDING;
+    }
+
+    public boolean isResolved() {
+        return status == TicketStatus.RESOLVED;
+    }
+
+    public boolean isClosed() {
+        return status == TicketStatus.CLOSED;
+    }
+
+    public boolean isEscalated() {
+        return status == TicketStatus.ESCALATED;
+    }
+
+    public boolean isActive() {
+        return status.isActive();
+    }
+
+    public boolean isCompleted() {
+        return status.isClosed();
+    }
 
     // Priority check methods
-    public boolean isHighPriority() { return priority.isHighPriority(); }
-    public boolean isUrgent() { return priority == TicketPriority.URGENT || priority == TicketPriority.CRITICAL; }
+    public boolean isHighPriority() {
+        return priority.isHighPriority();
+    }
+
+    public boolean isUrgent() {
+        return priority == TicketPriority.URGENT || priority == TicketPriority.CRITICAL;
+    }
 
     // Getters and Setters
-    public String getTitle() { return title; }
-    public void setTitle(String title) { this.title = title; }
+    public String getTitle() {
+        return title;
+    }
 
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
+    public void setTitle(String title) {
+        this.title = title;
+    }
 
-    public TicketPriority getPriority() { return priority; }
-    public void setPriority(TicketPriority priority) { this.priority = priority; }
+    public String getDescription() {
+        return description;
+    }
 
-    public TicketStatus getStatus() { return status; }
-    public void setStatus(TicketStatus status) { this.status = status; }
+    public void setDescription(String description) {
+        this.description = description;
+    }
 
-    public TicketCategory getCategory() { return category; }
-    public void setCategory(TicketCategory category) { this.category = category; }
+    public TicketPriority getPriority() {
+        return priority;
+    }
 
-    public TicketSource getSource() { return source; }
-    public void setSource(TicketSource source) { this.source = source; }
+    public void setPriority(TicketPriority priority) {
+        this.priority = priority;
+    }
 
-    public String getTicketNumber() { return ticketNumber; }
-    public void setTicketNumber(String ticketNumber) { this.ticketNumber = ticketNumber; }
+    public TicketStatus getStatus() {
+        return status;
+    }
 
-    public LocalDateTime getSlaDeadline() { return slaDeadline; }
-    public void setSlaDeadline(LocalDateTime slaDeadline) { this.slaDeadline = slaDeadline; }
+    public void setStatus(TicketStatus status) {
+        this.status = status;
+    }
 
-    public LocalDateTime getFirstResponseAt() { return firstResponseAt; }
-    public void setFirstResponseAt(LocalDateTime firstResponseAt) { this.firstResponseAt = firstResponseAt; }
+    public TicketCategory getCategory() {
+        return category;
+    }
 
-    public LocalDateTime getResolvedAt() { return resolvedAt; }
-    public void setResolvedAt(LocalDateTime resolvedAt) { this.resolvedAt = resolvedAt; }
+    public void setCategory(TicketCategory category) {
+        this.category = category;
+    }
 
-    public LocalDateTime getClosedAt() { return closedAt; }
-    public void setClosedAt(LocalDateTime closedAt) { this.closedAt = closedAt; }
+    public TicketSource getSource() {
+        return source;
+    }
 
-    public Integer getEstimatedHours() { return estimatedHours; }
-    public void setEstimatedHours(Integer estimatedHours) { this.estimatedHours = estimatedHours; }
+    public void setSource(TicketSource source) {
+        this.source = source;
+    }
 
-    public Integer getActualHours() { return actualHours; }
-    public void setActualHours(Integer actualHours) { this.actualHours = actualHours; }
+    public String getTicketNumber() {
+        return ticketNumber;
+    }
 
-    public String getResolutionSummary() { return resolutionSummary; }
-    public void setResolutionSummary(String resolutionSummary) { this.resolutionSummary = resolutionSummary; }
+    public void setTicketNumber(String ticketNumber) {
+        this.ticketNumber = ticketNumber;
+    }
 
-    public Integer getCustomerSatisfactionRating() { return customerSatisfactionRating; }
-    public void setCustomerSatisfactionRating(Integer customerSatisfactionRating) { this.customerSatisfactionRating = customerSatisfactionRating; }
+    public LocalDateTime getSlaDeadline() {
+        return slaDeadline;
+    }
 
-    public String getCustomerSatisfactionFeedback() { return customerSatisfactionFeedback; }
-    public void setCustomerSatisfactionFeedback(String customerSatisfactionFeedback) { this.customerSatisfactionFeedback = customerSatisfactionFeedback; }
+    public void setSlaDeadline(LocalDateTime slaDeadline) {
+        this.slaDeadline = slaDeadline;
+    }
 
-    public String getTags() { return tags; }
-    public void setTags(String tags) { this.tags = tags; }
+    public LocalDateTime getFirstResponseAt() {
+        return firstResponseAt;
+    }
 
-    public Boolean getIsInternal() { return isInternal; }
-    public void setIsInternal(Boolean isInternal) { this.isInternal = isInternal; }
+    public void setFirstResponseAt(LocalDateTime firstResponseAt) {
+        this.firstResponseAt = firstResponseAt;
+    }
 
-    public Integer getEscalationLevel() { return escalationLevel; }
-    public void setEscalationLevel(Integer escalationLevel) { this.escalationLevel = escalationLevel; }
+    public LocalDateTime getResolvedAt() {
+        return resolvedAt;
+    }
 
-    public LocalDateTime getLastActivityAt() { return lastActivityAt; }
-    public void setLastActivityAt(LocalDateTime lastActivityAt) { this.lastActivityAt = lastActivityAt; }
+    public void setResolvedAt(LocalDateTime resolvedAt) {
+        this.resolvedAt = resolvedAt;
+    }
 
-    public Company getCompany() { return company; }
-    public void setCompany(Company company) { this.company = company; }
+    public LocalDateTime getClosedAt() {
+        return closedAt;
+    }
 
-    public Customer getCustomer() { return customer; }
-    public void setCustomer(Customer customer) { this.customer = customer; }
+    public void setClosedAt(LocalDateTime closedAt) {
+        this.closedAt = closedAt;
+    }
 
-    public User getCreatorUser() { return creatorUser; }
-    public void setCreatorUser(User creatorUser) { this.creatorUser = creatorUser; }
+    public Integer getEstimatedHours() {
+        return estimatedHours;
+    }
 
-    public User getAssignedAgent() { return assignedAgent; }
-    public void setAssignedAgent(User assignedAgent) { this.assignedAgent = assignedAgent; }
+    public void setEstimatedHours(Integer estimatedHours) {
+        this.estimatedHours = estimatedHours;
+    }
 
-    public Department getDepartment() { return department; }
-    public void setDepartment(Department department) { this.department = department; }
+    public Integer getActualHours() {
+        return actualHours;
+    }
 
-    public List<TicketComment> getComments() { return comments; }
-    public void setComments(List<TicketComment> comments) { this.comments = comments; }
+    public void setActualHours(Integer actualHours) {
+        this.actualHours = actualHours;
+    }
 
-    public List<TicketAttachment> getAttachments() { return attachments; }
-    public void setAttachments(List<TicketAttachment> attachments) { this.attachments = attachments; }
+    public String getResolutionSummary() {
+        return resolutionSummary;
+    }
 
-    public List<TicketHistory> getHistory() { return history; }
-    public void setHistory(List<TicketHistory> history) { this.history = history; }
+    public void setResolutionSummary(String resolutionSummary) {
+        this.resolutionSummary = resolutionSummary;
+    }
+
+    public Integer getCustomerSatisfactionRating() {
+        return customerSatisfactionRating;
+    }
+
+    public void setCustomerSatisfactionRating(Integer customerSatisfactionRating) {
+        this.customerSatisfactionRating = customerSatisfactionRating;
+    }
+
+    public String getCustomerSatisfactionFeedback() {
+        return customerSatisfactionFeedback;
+    }
+
+    public void setCustomerSatisfactionFeedback(String customerSatisfactionFeedback) {
+        this.customerSatisfactionFeedback = customerSatisfactionFeedback;
+    }
+
+    public String getTags() {
+        return tags;
+    }
+
+    public void setTags(String tags) {
+        this.tags = tags;
+    }
+
+    public Boolean getIsInternal() {
+        return isInternal;
+    }
+
+    public void setIsInternal(Boolean isInternal) {
+        this.isInternal = isInternal;
+    }
+
+    public Integer getEscalationLevel() {
+        return escalationLevel;
+    }
+
+    public void setEscalationLevel(Integer escalationLevel) {
+        this.escalationLevel = escalationLevel;
+    }
+
+    public LocalDateTime getLastActivityAt() {
+        return lastActivityAt;
+    }
+
+    public void setLastActivityAt(LocalDateTime lastActivityAt) {
+        this.lastActivityAt = lastActivityAt;
+    }
+
+    public Company getCompany() {
+        return company;
+    }
+
+    public void setCompany(Company company) {
+        this.company = company;
+    }
+
+    public Customer getCustomer() {
+        return customer;
+    }
+
+    public void setCustomer(Customer customer) {
+        this.customer = customer;
+    }
+
+    public User getCreatorUser() {
+        return creatorUser;
+    }
+
+    public void setCreatorUser(User creatorUser) {
+        this.creatorUser = creatorUser;
+    }
+
+    public User getAssignedAgent() {
+        return assignedAgent;
+    }
+
+    public void setAssignedAgent(User assignedAgent) {
+        this.assignedAgent = assignedAgent;
+    }
+
+    public Department getDepartment() {
+        return department;
+    }
+
+    public void setDepartment(Department department) {
+        this.department = department;
+    }
+
+    public List<TicketComment> getComments() {
+        return comments;
+    }
+
+    public void setComments(List<TicketComment> comments) {
+        this.comments = comments;
+    }
+
+    public List<TicketAttachment> getAttachments() {
+        return attachments;
+    }
+
+    public void setAttachments(List<TicketAttachment> attachments) {
+        this.attachments = attachments;
+    }
+
+    public List<TicketHistory> getHistory() {
+        return history;
+    }
+
+    public void setHistory(List<TicketHistory> history) {
+        this.history = history;
+    }
+
+    public List<ChatMessage> getChatMessages() {
+        return chatMessages;
+    }
+
+    public void setChatMessages(List<ChatMessage> chatMessages) {
+        this.chatMessages = chatMessages;
+    }
+
+    public LocalDateTime getLastMessageAt() {
+        return lastMessageAt;
+    }
+
+    public void setLastMessageAt(LocalDateTime lastMessageAt) {
+        this.lastMessageAt = lastMessageAt;
+    }
+
+    public Integer getUnreadMessageCount() {
+        return unreadMessageCount;
+    }
+
+    public void setUnreadMessageCount(Integer unreadMessageCount) {
+        this.unreadMessageCount = unreadMessageCount;
+    }
+
+    public Boolean getChatEnabled() {
+        return chatEnabled;
+    }
+
+    public void setChatEnabled(Boolean chatEnabled) {
+        this.chatEnabled = chatEnabled;
+    }
 
     @Override
     public String toString() {

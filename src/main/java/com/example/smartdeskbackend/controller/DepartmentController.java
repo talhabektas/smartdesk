@@ -2,7 +2,9 @@
 package com.example.smartdeskbackend.controller;
 
 import com.example.smartdeskbackend.entity.Department;
+import com.example.smartdeskbackend.entity.Company;
 import com.example.smartdeskbackend.repository.DepartmentRepository;
+import com.example.smartdeskbackend.repository.CompanyRepository;
 import com.example.smartdeskbackend.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import org.slf4j.Logger;
@@ -24,7 +26,7 @@ import java.util.stream.Collectors;
  * Department management REST Controller
  */
 @RestController
-@RequestMapping("/api/v1/departments")
+@RequestMapping("/v1/departments")
 @CrossOrigin(origins = {"http://localhost:3000", "http://localhost:3001"})
 public class DepartmentController {
 
@@ -32,6 +34,9 @@ public class DepartmentController {
 
     @Autowired
     private DepartmentRepository departmentRepository;
+
+    @Autowired
+    private CompanyRepository companyRepository;
 
     @Autowired
     private JwtUtil jwtUtil;
@@ -168,6 +173,144 @@ public class DepartmentController {
         response.put("users", users);
 
         return response;
+    }
+
+    /**
+     * Yeni department oluştur
+     */
+    @PostMapping
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<?> createDepartment(@RequestBody Map<String, Object> request) {
+        logger.info("🔧 POST /departments endpoint hit");
+        logger.info("📥 Received request body: {}", request);
+        logger.info("Creating new department: {}", request.get("name"));
+
+        try {
+            String name = (String) request.get("name");
+            String description = (String) request.get("description");
+            Long companyId = ((Number) request.get("companyId")).longValue();
+
+            if (name == null || name.trim().isEmpty()) {
+                return ResponseEntity.badRequest()
+                        .body(createErrorResponse("INVALID_INPUT", "Department name is required"));
+            }
+
+            if (companyId == null) {
+                return ResponseEntity.badRequest()
+                        .body(createErrorResponse("INVALID_INPUT", "Company ID is required"));
+            }
+
+            // Check if department with same name exists in company
+            if (departmentRepository.existsByNameAndCompanyId(name.trim(), companyId)) {
+                return ResponseEntity.status(HttpStatus.CONFLICT)
+                        .body(createErrorResponse("DEPARTMENT_EXISTS", "Department with this name already exists in the company"));
+            }
+
+            Department department = new Department();
+            department.setName(name.trim());
+            department.setDescription(description != null ? description.trim() : null);
+            department.setIsActive(true);
+            department.setCreatedAt(LocalDateTime.now());
+            department.setUpdatedAt(LocalDateTime.now());
+
+            // Load and set company
+            Company company = companyRepository.findById(companyId)
+                    .orElseThrow(() -> new RuntimeException("Company not found with id: " + companyId));
+            department.setCompany(company);
+            
+            department = departmentRepository.save(department);
+
+            Map<String, Object> response = mapDepartmentToResponse(department);
+            return ResponseEntity.status(HttpStatus.CREATED).body(response);
+
+        } catch (Exception e) {
+            logger.error("Error creating department", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                    .body(createErrorResponse("DEPARTMENT_CREATION_ERROR", e.getMessage()));
+        }
+    }
+
+    /**
+     * Department güncelle
+     */
+    @PutMapping("/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<?> updateDepartment(@PathVariable Long id, @RequestBody Map<String, Object> request) {
+        logger.info("Updating department: {}", id);
+
+        try {
+            Department department = departmentRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Department not found with id: " + id));
+
+            String name = (String) request.get("name");
+            String description = (String) request.get("description");
+
+            if (name != null && !name.trim().isEmpty()) {
+                // Check if another department with same name exists in the same company
+                if (!department.getName().equals(name.trim()) && 
+                    departmentRepository.existsByNameAndCompanyIdAndIdNot(name.trim(), department.getCompany().getId(), id)) {
+                    return ResponseEntity.status(HttpStatus.CONFLICT)
+                            .body(createErrorResponse("DEPARTMENT_EXISTS", "Department with this name already exists in the company"));
+                }
+                department.setName(name.trim());
+            }
+
+            if (description != null) {
+                department.setDescription(description.trim().isEmpty() ? null : description.trim());
+            }
+
+            department.setUpdatedAt(LocalDateTime.now());
+            department = departmentRepository.save(department);
+
+            Map<String, Object> response = mapDepartmentToResponse(department);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("Error updating department: {}", id, e);
+            
+            HttpStatus status = HttpStatus.INTERNAL_SERVER_ERROR;
+            if (e.getMessage().contains("not found")) {
+                status = HttpStatus.NOT_FOUND;
+            }
+
+            return ResponseEntity.status(status)
+                    .body(createErrorResponse("DEPARTMENT_UPDATE_ERROR", e.getMessage()));
+        }
+    }
+
+    /**
+     * Department sil (soft delete)
+     */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<?> deleteDepartment(@PathVariable Long id) {
+        logger.info("Deleting department: {}", id);
+
+        try {
+            Department department = departmentRepository.findById(id)
+                    .orElseThrow(() -> new RuntimeException("Department not found with id: " + id));
+
+            // Soft delete - set isActive to false
+            department.setIsActive(false);
+            department.setUpdatedAt(LocalDateTime.now());
+            departmentRepository.save(department);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Department deleted successfully");
+            response.put("departmentId", id);
+            response.put("timestamp", LocalDateTime.now());
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("Error deleting department: {}", id, e);
+
+            HttpStatus status = e.getMessage().contains("not found") ?
+                    HttpStatus.NOT_FOUND : HttpStatus.INTERNAL_SERVER_ERROR;
+
+            return ResponseEntity.status(status)
+                    .body(createErrorResponse("DEPARTMENT_DELETION_ERROR", e.getMessage()));
+        }
     }
 
     /**

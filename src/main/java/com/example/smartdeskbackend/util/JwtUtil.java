@@ -107,6 +107,13 @@ public class JwtUtil {
     }
 
     /**
+     * Token'dan email'i çıkarır (alias for getEmailFromToken)
+     */
+    public String extractEmail(String token) {
+        return getEmailFromToken(token);
+    }
+
+    /**
      * Token'dan kullanıcı ID'sini çıkarır
      */
     public Long getUserIdFromToken(String token) {
@@ -169,14 +176,39 @@ public class JwtUtil {
      */
     private Claims getAllClaimsFromToken(String token) {
         try {
+            if (token == null || token.trim().isEmpty()) {
+                logger.error("JWT token is null or empty");
+                throw new IllegalArgumentException("JWT token cannot be null or empty");
+            }
+            
+            // Token format kontrolü (Bearer prefix varsa kaldır)
+            if (token.startsWith("Bearer ")) {
+                token = token.substring(7);
+            }
+            
             return Jwts.parser()
                     .verifyWith(getSigningKey())
                     .build()
                     .parseSignedClaims(token)
                     .getPayload();
-        } catch (JwtException | IllegalArgumentException e) {
-            logger.error("Error parsing JWT token: {}", e.getMessage());
+        } catch (ExpiredJwtException e) {
+            logger.error("JWT token is expired: {}", e.getMessage());
             throw e;
+        } catch (UnsupportedJwtException e) {
+            logger.error("JWT token is unsupported: {}", e.getMessage());
+            throw e;
+        } catch (MalformedJwtException e) {
+            logger.error("JWT token is malformed: {}", e.getMessage());
+            throw e;
+        } catch (SignatureException e) {
+            logger.error("JWT signature validation failed: {}", e.getMessage());
+            throw e;
+        } catch (IllegalArgumentException e) {
+            logger.error("JWT token compact of handler are invalid: {}", e.getMessage());
+            throw e;
+        } catch (Exception e) {
+            logger.error("Unexpected error parsing JWT token: {}", e.getMessage());
+            throw new JwtException("Token parsing failed", e);
         }
     }
 

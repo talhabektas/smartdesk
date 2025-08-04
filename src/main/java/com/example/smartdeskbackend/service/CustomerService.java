@@ -13,8 +13,10 @@ import java.util.List;
 public interface CustomerService {
     CustomerDetailResponse getCustomerById(Long id);
     CustomerDetailResponse getCustomerByEmail(String email);
+    Page<CustomerResponse> getAllCustomers(Pageable pageable);
     Page<CustomerResponse> getCustomersByCompany(Long companyId, Pageable pageable);
     Page<CustomerResponse> searchCustomers(Long companyId, String searchTerm, Pageable pageable);
+    Page<CustomerResponse> searchAllCustomers(String searchTerm, Pageable pageable);
     List<CustomerResponse> getVipCustomers(Long companyId);
     CustomerDetailResponse createCustomer(CreateCustomerRequest request);
     CustomerDetailResponse updateCustomer(Long id, UpdateCustomerRequest request);

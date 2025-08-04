@@ -226,13 +226,17 @@ public class TicketServiceImpl implements TicketService {
         // Ticket numarası oluştur
         ticket.generateTicketNumber();
 
-        // SLA deadline hesapla (default 24 saat)
+        // First save to get createdAt populated
+        ticket = ticketRepository.save(ticket);
+        
+        // SLA deadline hesapla (default 24 saat) - save'den sonra çağır
         ticket.calculateSlaDeadline(24);
-
+        
+        // Update with SLA deadline
         ticket = ticketRepository.save(ticket);
 
         // History kaydı oluştur
-        createHistoryRecord(ticket, null, "CREATED", "Ticket created", creatorUser);
+        createHistoryRecord(ticket, "status", "", "NEW", creatorUser);
 
         // WebSocket bildirimi gönder - Yeni ticket oluşturuldu
         sendTicketCreationNotifications(ticket);

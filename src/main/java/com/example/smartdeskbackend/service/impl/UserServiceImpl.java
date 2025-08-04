@@ -18,8 +18,7 @@ import com.example.smartdeskbackend.repository.CompanyRepository;
 import com.example.smartdeskbackend.repository.DepartmentRepository;
 import com.example.smartdeskbackend.repository.UserRepository;
 import com.example.smartdeskbackend.service.UserService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
@@ -37,9 +36,8 @@ import java.util.stream.Collectors;
  */
 @Service
 @Transactional
+@Slf4j
 public class UserServiceImpl implements UserService {
-
-    private static final Logger logger = LoggerFactory.getLogger(UserServiceImpl.class);
 
     @Autowired
     private UserRepository userRepository;
@@ -56,7 +54,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public UserProfileResponse getUserById(Long id) {
-        logger.debug("Getting user by id: {}", id);
+        log.debug("Getting user by id: {}", id);
 
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
@@ -67,7 +65,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public UserProfileResponse getUserByEmail(String email) {
-        logger.debug("Getting user by email: {}", email);
+        log.debug("Getting user by email: {}", email);
 
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with email: " + email));
@@ -78,7 +76,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public Page<UserListResponse> getUsersByCompany(Long companyId, Pageable pageable) {
-        logger.debug("Getting users by company: {}", companyId);
+        log.debug("Getting users by company: {}", companyId);
 
         // Company existence kontrolü
         if (!companyRepository.existsById(companyId)) {
@@ -88,19 +86,18 @@ public class UserServiceImpl implements UserService {
         // String parametreli metodu kullan
         Page<User> users = userRepository.findUsersWithStringFilters(
                 companyId,
-                null,  // role as String
-                null,  // status as String
-                null,  // departmentId
-                pageable
-        );
+                null, // role as String
+                null, // status as String
+                null, // departmentId
+                pageable);
         return users.map(this::mapToListResponse);
     }
 
     @Override
     @Transactional(readOnly = true)
     public Page<UserListResponse> searchUsers(Long companyId, String searchTerm, UserRole role,
-                                              UserStatus status, Long departmentId, Pageable pageable) {
-        logger.debug("Searching users in company: {} with term: {}", companyId, searchTerm);
+            UserStatus status, Long departmentId, Pageable pageable) {
+        log.debug("Searching users in company: {} with term: {}", companyId, searchTerm);
 
         if (searchTerm != null && !searchTerm.trim().isEmpty()) {
             return userRepository.searchUsers(companyId, searchTerm.trim(), pageable)
@@ -109,18 +106,17 @@ public class UserServiceImpl implements UserService {
             // String parametreli metodu kullan
             return userRepository.findUsersWithStringFilters(
                     companyId,
-                    role != null ? role.getCode() : null,     // String versiyonunu kullan
+                    role != null ? role.getCode() : null, // String versiyonunu kullan
                     status != null ? status.getCode() : null, // String versiyonunu kullan
                     departmentId,
-                    pageable
-            ).map(this::mapToListResponse);
+                    pageable).map(this::mapToListResponse);
         }
     }
 
     @Override
     @Transactional(readOnly = true)
     public List<UserListResponse> getAgentsByDepartment(Long departmentId) {
-        logger.debug("Getting agents by department: {}", departmentId);
+        log.debug("Getting agents by department: {}", departmentId);
 
         List<User> agents = userRepository.findByDepartmentIdAndRole(departmentId, UserRole.AGENT);
         return agents.stream()
@@ -131,7 +127,7 @@ public class UserServiceImpl implements UserService {
     @Override
     @Transactional(readOnly = true)
     public List<UserListResponse> getAvailableAgents(Long departmentId, int limit) {
-        logger.debug("Getting available agents for department: {}", departmentId);
+        log.debug("Getting available agents for department: {}", departmentId);
 
         List<User> agents = userRepository.findLeastBusyAgents(departmentId, limit);
         return agents.stream()
@@ -141,7 +137,7 @@ public class UserServiceImpl implements UserService {
 
     @Override
     public UserProfileResponse createUser(CreateUserRequest request) {
-        logger.info("Creating new user: {}", request.getEmail());
+        log.info("Creating new user: {}", request.getEmail());
 
         // Email uniqueness kontrolü
         if (userRepository.existsByEmail(request.getEmail())) {
@@ -150,7 +146,8 @@ public class UserServiceImpl implements UserService {
 
         // Company kontrolü
         Company company = companyRepository.findById(request.getCompanyId())
-                .orElseThrow(() -> new ResourceNotFoundException("Company not found with id: " + request.getCompanyId()));
+                .orElseThrow(
+                        () -> new ResourceNotFoundException("Company not found with id: " + request.getCompanyId()));
 
         // Company user limit kontrolü
         if (!company.canAddMoreUsers()) {
@@ -161,7 +158,8 @@ public class UserServiceImpl implements UserService {
         Department department = null;
         if (request.getDepartmentId() != null) {
             department = departmentRepository.findById(request.getDepartmentId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Department not found with id: " + request.getDepartmentId()));
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Department not found with id: " + request.getDepartmentId()));
 
             // Department'ın aynı company'ye ait olduğunu kontrol et
             if (!department.getCompany().getId().equals(company.getId())) {
@@ -184,13 +182,13 @@ public class UserServiceImpl implements UserService {
 
         user = userRepository.save(user);
 
-        logger.info("User created successfully with id: {}", user.getId());
+        log.info("User created successfully with id: {}", user.getId());
         return mapToProfileResponse(user);
     }
 
     @Override
     public UserProfileResponse updateUser(Long id, UpdateUserRequest request) {
-        logger.info("Updating user: {}", id);
+        log.info("Updating user: {}", id);
 
         User user = userRepository.findById(id)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + id));
@@ -223,12 +221,24 @@ public class UserServiceImpl implements UserService {
             user.setAvatarUrl(request.getAvatarUrl());
         }
 
+        // Company güncelleme
+        if (request.getCompanyId() != null) {
+            Company company = companyRepository.findById(request.getCompanyId())
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Company not found with id: " + request.getCompanyId()));
+            user.setCompany(company);
+            
+            // Şirket değiştiğinde department'ı temizle
+            user.setDepartment(null);
+        }
+
         // Department güncelleme
         if (request.getDepartmentId() != null) {
             Department department = departmentRepository.findById(request.getDepartmentId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Department not found with id: " + request.getDepartmentId()));
+                    .orElseThrow(() -> new ResourceNotFoundException(
+                            "Department not found with id: " + request.getDepartmentId()));
 
-            // Department'ın aynı company'ye ait olduğunu kontrol et
+            // Department'ın user'ın company'sine ait olduğunu kontrol et
             if (!department.getCompany().getId().equals(user.getCompany().getId())) {
                 throw new BusinessLogicException("Department does not belong to user's company");
             }
@@ -238,13 +248,13 @@ public class UserServiceImpl implements UserService {
 
         user = userRepository.save(user);
 
-        logger.info("User updated successfully: {}", id);
+        log.info("User updated successfully: {}", id);
         return mapToProfileResponse(user);
     }
 
     @Override
     public void changePassword(Long userId, ChangePasswordRequest request) {
-        logger.info("Changing password for user: {}", userId);
+        log.info("Changing password for user: {}", userId);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
@@ -258,12 +268,12 @@ public class UserServiceImpl implements UserService {
         user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
         userRepository.save(user);
 
-        logger.info("Password changed successfully for user: {}", userId);
+        log.info("Password changed successfully for user: {}", userId);
     }
 
     @Override
     public void resetPassword(Long userId, String newPassword) {
-        logger.info("Resetting password for user: {}", userId);
+        log.info("Resetting password for user: {}", userId);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
@@ -274,12 +284,12 @@ public class UserServiceImpl implements UserService {
 
         userRepository.save(user);
 
-        logger.info("Password reset successfully for user: {}", userId);
+        log.info("Password reset successfully for user: {}", userId);
     }
 
     @Override
     public void activateUser(Long userId) {
-        logger.info("Activating user: {}", userId);
+        log.info("Activating user: {}", userId);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
@@ -291,12 +301,12 @@ public class UserServiceImpl implements UserService {
         user.setStatus(UserStatus.ACTIVE);
         userRepository.save(user);
 
-        logger.info("User activated successfully: {}", userId);
+        log.info("User activated successfully: {}", userId);
     }
 
     @Override
     public void deactivateUser(Long userId) {
-        logger.info("Deactivating user: {}", userId);
+        log.info("Deactivating user: {}", userId);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
@@ -308,12 +318,12 @@ public class UserServiceImpl implements UserService {
         user.setStatus(UserStatus.INACTIVE);
         userRepository.save(user);
 
-        logger.info("User deactivated successfully: {}", userId);
+        log.info("User deactivated successfully: {}", userId);
     }
 
     @Override
     public void deleteUser(Long userId) {
-        logger.info("Deleting user: {}", userId);
+        log.info("Deleting user: {}", userId);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
@@ -322,12 +332,12 @@ public class UserServiceImpl implements UserService {
         user.setStatus(UserStatus.DELETED);
         userRepository.save(user);
 
-        logger.info("User deleted successfully: {}", userId);
+        log.info("User deleted successfully: {}", userId);
     }
 
     @Override
     public void unlockUser(Long userId) {
-        logger.info("Unlocking user: {}", userId);
+        log.info("Unlocking user: {}", userId);
 
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
@@ -339,13 +349,13 @@ public class UserServiceImpl implements UserService {
         user.unlockAccount();
         userRepository.save(user);
 
-        logger.info("User unlocked successfully: {}", userId);
+        log.info("User unlocked successfully: {}", userId);
     }
 
     @Override
     @Transactional(readOnly = true)
     public long getUserCountByCompany(Long companyId) {
-        logger.debug("Getting user count for company: {}", companyId);
+        log.debug("Getting user count for company: {}", companyId);
         return userRepository.countByCompanyId(companyId);
     }
 
@@ -368,6 +378,15 @@ public class UserServiceImpl implements UserService {
     @Transactional(readOnly = true)
     public List<Object[]> getAgentPerformanceStats(Long companyId, LocalDateTime startDate, LocalDateTime endDate) {
         return userRepository.getAgentPerformanceStats(companyId, startDate, endDate);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public User getCurrentUser() {
+        // TODO: Implement proper authentication context retrieval
+        // For now, return a mock user for development
+        log.warn("getCurrentUser() called - returning mock user for development");
+        return userRepository.findById(1L).orElse(null);
     }
 
     /**
@@ -424,22 +443,35 @@ public class UserServiceImpl implements UserService {
         response.setRoleDisplayName(user.getRole().getDisplayName());
         response.setStatus(user.getStatus().getCode());
         response.setStatusDisplayName(user.getStatus().getDisplayName());
+        response.setPhone(user.getPhone());
         response.setAvatarUrl(user.getAvatarUrl());
         response.setLastLogin(user.getLastLogin());
         response.setAccountLocked(user.isAccountLocked());
+        response.setEmailVerified(user.getEmailVerified());
+        response.setLoginAttempts(user.getLoginAttempts());
 
         // Company bilgileri
         if (user.getCompany() != null) {
+            response.setCompanyId(user.getCompany().getId());
             response.setCompanyName(user.getCompany().getName());
         }
 
         // Department bilgileri
         if (user.getDepartment() != null) {
+            response.setDepartmentId(user.getDepartment().getId());
             response.setDepartmentName(user.getDepartment().getName());
         }
 
         response.setCreatedAt(user.getCreatedAt());
+        response.setUpdatedAt(user.getUpdatedAt());
 
         return response;
+    }
+
+    @Override
+    public User findByEmail(String email) {
+        log.info("Finding user by email: {}", email);
+        return userRepository.findByEmail(email)
+                .orElseThrow(() -> new BusinessLogicException("User not found with email: " + email));
     }
 }

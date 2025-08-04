@@ -25,6 +25,8 @@ public class UpdateUserRequest {
 
     private Long departmentId;
 
+    private Long companyId;
+
     private String avatarUrl;
 
     // Constructors
@@ -51,6 +53,9 @@ public class UpdateUserRequest {
 
     public Long getDepartmentId() { return departmentId; }
     public void setDepartmentId(Long departmentId) { this.departmentId = departmentId; }
+
+    public Long getCompanyId() { return companyId; }
+    public void setCompanyId(Long companyId) { this.companyId = companyId; }
 
     public String getAvatarUrl() { return avatarUrl; }
     public void setAvatarUrl(String avatarUrl) { this.avatarUrl = avatarUrl; }

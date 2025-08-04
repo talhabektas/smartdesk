@@ -3,11 +3,14 @@ package com.example.smartdeskbackend.controller;
 import com.example.smartdeskbackend.dto.request.user.CreateUserRequest;
 import com.example.smartdeskbackend.dto.request.user.UpdateUserRequest;
 import com.example.smartdeskbackend.dto.request.user.ChangePasswordRequest;
+import com.example.smartdeskbackend.dto.request.user.UserSearchRequest;
 import com.example.smartdeskbackend.dto.response.user.UserListResponse;
 import com.example.smartdeskbackend.dto.response.user.UserProfileResponse;
+import com.example.smartdeskbackend.dto.response.common.PageResponse;
 import com.example.smartdeskbackend.enums.UserRole;
 import com.example.smartdeskbackend.enums.UserStatus;
 import com.example.smartdeskbackend.service.UserService;
+import com.example.smartdeskbackend.service.UserSearchService;
 import com.example.smartdeskbackend.util.JwtUtil;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
@@ -22,6 +25,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.RequestMethod;
 
 import java.time.LocalDateTime;
 import java.util.HashMap;
@@ -32,8 +36,7 @@ import java.util.Map;
  * User management REST Controller
  */
 @RestController
-@RequestMapping("/api/v1/users")
-@CrossOrigin(origins = {"http://localhost:3000", "http://localhost:3001"})
+@RequestMapping("/v1/users")
 public class UserController {
 
     private static final Logger logger = LoggerFactory.getLogger(UserController.class);
@@ -42,17 +45,45 @@ public class UserController {
     private UserService userService;
 
     @Autowired
+    private UserSearchService userSearchService;
+
+    @Autowired
     private JwtUtil jwtUtil;
 
     /**
      * Kullanıcı profil bilgilerini getir
      */
     @GetMapping("/{id}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('MANAGER') or #id == authentication.principal.id")
-    public ResponseEntity<?> getUserById(@PathVariable Long id) {
+    public ResponseEntity<?> getUserById(@PathVariable Long id, HttpServletRequest request) {
         logger.info("Getting user by id: {}", id);
 
         try {
+            // Manual authorization check
+            String token = extractTokenFromRequest(request);
+            if (token == null || token.trim().isEmpty()) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(createErrorResponse("UNAUTHORIZED", "No valid token provided"));
+            }
+
+            // Token validation
+            if (!jwtUtil.validateToken(token)) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(createErrorResponse("INVALID_TOKEN", "Token is invalid or expired"));
+            }
+
+            String userRole = jwtUtil.getRoleFromToken(token);
+            Long tokenUserId = jwtUtil.getUserIdFromToken(token);
+
+            // Role-based access control
+            boolean canAccess = "SUPER_ADMIN".equals(userRole) ||
+                    "MANAGER".equals(userRole) ||
+                    id.equals(tokenUserId);
+
+            if (!canAccess) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(createErrorResponse("ACCESS_DENIED", "You don't have permission to access this user"));
+            }
+
             UserProfileResponse user = userService.getUserById(id);
             return ResponseEntity.ok(user);
 
@@ -96,7 +127,45 @@ public class UserController {
     }
 
     /**
-     * Kullanıcı arama ve filtreleme
+     * Advanced user search with comprehensive filtering
+     */
+    @PostMapping("/search")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('MANAGER')")
+    public ResponseEntity<?> searchUsersAdvanced(
+            @Valid @RequestBody UserSearchRequest searchRequest,
+            HttpServletRequest request) {
+
+        logger.info("Advanced user search with criteria: {}", searchRequest);
+
+        try {
+            // Company access kontrolü
+            if (searchRequest.getCompanyId() != null && !hasAccessToCompany(request, searchRequest.getCompanyId())) {
+                return ResponseEntity.status(HttpStatus.FORBIDDEN)
+                        .body(createErrorResponse("ACCESS_DENIED", "Access denied to company data"));
+            }
+
+            // If no company specified and user is not SUPER_ADMIN, use their company
+            if (searchRequest.getCompanyId() == null) {
+                String token = extractTokenFromRequest(request);
+                String role = jwtUtil.getRoleFromToken(token);
+                if (!"SUPER_ADMIN".equals(role)) {
+                    Long userCompanyId = jwtUtil.getCompanyIdFromToken(token);
+                    searchRequest.setCompanyId(userCompanyId);
+                }
+            }
+
+            PageResponse<UserListResponse> response = userSearchService.searchUsers(searchRequest);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("Error in advanced user search", e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(createErrorResponse("USER_SEARCH_ERROR", e.getMessage()));
+        }
+    }
+
+    /**
+     * Legacy user search endpoint (kept for backward compatibility)
      */
     @GetMapping("/search")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('MANAGER')")
@@ -109,7 +178,7 @@ public class UserController {
             @PageableDefault(size = 20) Pageable pageable,
             HttpServletRequest request) {
 
-        logger.info("Searching users in company: {} with query: {}", companyId, q);
+        logger.info("Legacy user search in company: {} with query: {}", companyId, q);
 
         try {
             // Company access kontrolü
@@ -118,27 +187,38 @@ public class UserController {
                         .body(createErrorResponse("ACCESS_DENIED", "Access denied to company data"));
             }
 
-            Page<UserListResponse> users = userService.searchUsers(companyId, q, role, status, departmentId, pageable);
+            // Convert to new search request
+            UserSearchRequest searchRequest = UserSearchRequest.builder()
+                    .companyId(companyId)
+                    .searchTerm(q)
+                    .roles(role != null ? List.of(role) : null)
+                    .statuses(status != null ? List.of(status) : null)
+                    .departmentId(departmentId)
+                    .page(pageable.getPageNumber())
+                    .size(pageable.getPageSize())
+                    .build();
 
-            Map<String, Object> response = new HashMap<>();
-            response.put("users", users.getContent());
-            response.put("totalElements", users.getTotalElements());
-            response.put("totalPages", users.getTotalPages());
-            response.put("currentPage", users.getNumber());
-            response.put("size", users.getSize());
-            response.put("hasNext", users.hasNext());
-            response.put("hasPrevious", users.hasPrevious());
-            response.put("searchQuery", q);
-            response.put("filters", Map.of(
+            PageResponse<UserListResponse> response = userSearchService.searchUsers(searchRequest);
+
+            // Convert back to legacy format for compatibility
+            Map<String, Object> legacyResponse = new HashMap<>();
+            legacyResponse.put("users", response.getContent());
+            legacyResponse.put("totalElements", response.getTotalElements());
+            legacyResponse.put("totalPages", response.getTotalPages());
+            legacyResponse.put("currentPage", response.getCurrentPage());
+            legacyResponse.put("size", response.getPageSize());
+            legacyResponse.put("hasNext", response.getHasNext());
+            legacyResponse.put("hasPrevious", response.getHasPrevious());
+            legacyResponse.put("searchQuery", q);
+            legacyResponse.put("filters", Map.of(
                     "role", role,
                     "status", status,
-                    "departmentId", departmentId
-            ));
+                    "departmentId", departmentId));
 
-            return ResponseEntity.ok(response);
+            return ResponseEntity.ok(legacyResponse);
 
         } catch (Exception e) {
-            logger.error("Error searching users", e);
+            logger.error("Error in legacy user search", e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(createErrorResponse("USER_SEARCH_ERROR", e.getMessage()));
         }
@@ -306,8 +386,7 @@ public class UserController {
         } catch (Exception e) {
             logger.error("Error changing password for user: {}", id, e);
 
-            HttpStatus status = e.getMessage().contains("not found") ?
-                    HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            HttpStatus status = e.getMessage().contains("not found") ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
 
             return ResponseEntity.status(status)
                     .body(createErrorResponse("PASSWORD_CHANGE_ERROR", e.getMessage()));
@@ -349,8 +428,7 @@ public class UserController {
         } catch (Exception e) {
             logger.error("Error resetting password for user: {}", id, e);
 
-            HttpStatus status = e.getMessage().contains("not found") ?
-                    HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            HttpStatus status = e.getMessage().contains("not found") ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
 
             return ResponseEntity.status(status)
                     .body(createErrorResponse("PASSWORD_RESET_ERROR", e.getMessage()));
@@ -378,8 +456,7 @@ public class UserController {
         } catch (Exception e) {
             logger.error("Error activating user: {}", id, e);
 
-            HttpStatus status = e.getMessage().contains("not found") ?
-                    HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            HttpStatus status = e.getMessage().contains("not found") ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
 
             return ResponseEntity.status(status)
                     .body(createErrorResponse("USER_ACTIVATION_ERROR", e.getMessage()));
@@ -407,8 +484,7 @@ public class UserController {
         } catch (Exception e) {
             logger.error("Error deactivating user: {}", id, e);
 
-            HttpStatus status = e.getMessage().contains("not found") ?
-                    HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            HttpStatus status = e.getMessage().contains("not found") ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
 
             return ResponseEntity.status(status)
                     .body(createErrorResponse("USER_DEACTIVATION_ERROR", e.getMessage()));
@@ -436,8 +512,7 @@ public class UserController {
         } catch (Exception e) {
             logger.error("Error deleting user: {}", id, e);
 
-            HttpStatus status = e.getMessage().contains("not found") ?
-                    HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            HttpStatus status = e.getMessage().contains("not found") ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
 
             return ResponseEntity.status(status)
                     .body(createErrorResponse("USER_DELETION_ERROR", e.getMessage()));
@@ -465,8 +540,7 @@ public class UserController {
         } catch (Exception e) {
             logger.error("Error unlocking user: {}", id, e);
 
-            HttpStatus status = e.getMessage().contains("not found") ?
-                    HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+            HttpStatus status = e.getMessage().contains("not found") ? HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
 
             return ResponseEntity.status(status)
                     .body(createErrorResponse("USER_UNLOCK_ERROR", e.getMessage()));
@@ -548,10 +622,12 @@ public class UserController {
     private boolean hasAccessToCompany(HttpServletRequest request, Long companyId) {
         try {
             String token = extractTokenFromRequest(request);
-            if (token == null) return false;
+            if (token == null)
+                return false;
 
             String role = jwtUtil.getRoleFromToken(token);
-            if ("SUPER_ADMIN".equals(role)) return true;
+            if ("SUPER_ADMIN".equals(role))
+                return true;
 
             Long userCompanyId = jwtUtil.getCompanyIdFromToken(token);
             return companyId.equals(userCompanyId);
@@ -568,7 +644,8 @@ public class UserController {
     private boolean isUpdatingSelf(HttpServletRequest request, Long userId) {
         try {
             String token = extractTokenFromRequest(request);
-            if (token == null) return false;
+            if (token == null)
+                return false;
 
             Long tokenUserId = jwtUtil.getUserIdFromToken(token);
             return userId.equals(tokenUserId);
@@ -585,7 +662,8 @@ public class UserController {
     private boolean isSuperAdminOrManager(HttpServletRequest request) {
         try {
             String token = extractTokenFromRequest(request);
-            if (token == null) return false;
+            if (token == null)
+                return false;
 
             String role = jwtUtil.getRoleFromToken(token);
             return "SUPER_ADMIN".equals(role) || "MANAGER".equals(role);

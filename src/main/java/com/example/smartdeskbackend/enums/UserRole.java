@@ -22,9 +22,17 @@ public enum UserRole {
     }
 
     // Getters
-    public String getCode() { return code; }
-    public String getDisplayName() { return displayName; }
-    public String getDescription() { return description; }
+    public String getCode() {
+        return code;
+    }
+
+    public String getDisplayName() {
+        return displayName;
+    }
+
+    public String getDescription() {
+        return description;
+    }
 
     /**
      * String değerden UserRole enum'ına dönüşüm
@@ -50,5 +58,26 @@ public enum UserRole {
      */
     public boolean hasPermission(UserRole requiredRole) {
         return this.ordinal() <= requiredRole.ordinal();
+    }
+
+    /**
+     * Agent rolü mü kontrol et
+     */
+    public boolean isAgent() {
+        return this == AGENT || this == MANAGER || this == SUPER_ADMIN;
+    }
+
+    /**
+     * Yönetici rolü mü kontrol et
+     */
+    public boolean isManager() {
+        return this == MANAGER || this == SUPER_ADMIN;
+    }
+
+    /**
+     * Admin rolü mü kontrol et
+     */
+    public boolean isAdmin() {
+        return this == SUPER_ADMIN;
     }
 }

@@ -49,7 +49,7 @@ public class SecurityConfig {
 
     @Bean
     public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder(12); // Strength 12 for better security
+        return new BCryptPasswordEncoder(); // Default strength (10)
     }
 
     @Bean
@@ -68,16 +68,9 @@ public class SecurityConfig {
     @Bean
     public CorsConfigurationSource corsConfigurationSource() {
         CorsConfiguration configuration = new CorsConfiguration();
-        configuration.setAllowedOriginPatterns(Arrays.asList(
-                "http://localhost:3000",
-                "http://localhost:3001",
-                "http://localhost:8080",
-                "http://localhost:8081",
-                "https://*.smartdesk.com"
-        ));
+        configuration.setAllowedOriginPatterns(Arrays.asList("*")); // Allow all origins for development
         configuration.setAllowedMethods(Arrays.asList(
-                "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"
-        ));
+                "GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS", "HEAD"));
         configuration.setAllowedHeaders(Arrays.asList("*"));
         configuration.setAllowCredentials(true);
         configuration.setMaxAge(3600L);
@@ -85,10 +78,11 @@ public class SecurityConfig {
                 "Authorization",
                 "X-Total-Count",
                 "X-Page-Number",
-                "X-Page-Size"
-        ));
+                "X-Page-Size",
+                "Access-Control-Allow-Origin",
+                "Access-Control-Allow-Credentials"));
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", configuration);
+        source.registerCorsConfiguration("/**", configuration);
         return source;
     }
 
@@ -106,57 +100,54 @@ public class SecurityConfig {
      * Security filter chain yapılandırması
      */
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, MvcRequestMatcher.Builder mvc, JwtUtil jwtUtil) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, MvcRequestMatcher.Builder mvc, JwtUtil jwtUtil)
+            throws Exception {
         http
                 .csrf(AbstractHttpConfigurer::disable)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .sessionManagement(session ->
-                        session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                .exceptionHandling(exceptions ->
-                        exceptions.authenticationEntryPoint(jwtAuthenticationEntryPoint))
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .exceptionHandling(exceptions -> exceptions.authenticationEntryPoint(jwtAuthenticationEntryPoint))
                 .authenticationProvider(authenticationProvider())
 
                 .authorizeHttpRequests(authz -> authz
+                        // Allow all OPTIONS requests (preflight)
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
                         .requestMatchers("/", "/health", "/info").permitAll()
 
-                        .requestMatchers(mvc.pattern("/api/v1/auth/**")).permitAll()
-                        .requestMatchers(mvc.pattern("/api/v1/public/**")).permitAll()
-                        .requestMatchers(mvc.pattern("/api/v1/test/**")).permitAll()
-                        .requestMatchers(mvc.pattern("/api/v1/companies/domain/**")).permitAll()
-                        .requestMatchers(mvc.pattern("/api/v1/files/download/**")).permitAll()
+                        // Auth endpoints - PUBLIC ACCESS
+                        .requestMatchers("/v1/auth/**").permitAll()
+                        .requestMatchers("/v1/public/**").permitAll()
+                        .requestMatchers("/v1/test/**").permitAll()
+                        .requestMatchers("/v1/companies/domain/**").permitAll()
+                        .requestMatchers("/v1/files/download/**").permitAll()
 
                         // WebSocket endpoint'ine izin ver (public olmalı)
-                        .requestMatchers(mvc.pattern("/ws/**")).permitAll()
+                        .requestMatchers("/ws/**").permitAll()
+                        .requestMatchers("/ws").permitAll()
 
-                        .requestMatchers(mvc.pattern("/swagger-ui/**")).permitAll()
-                        .requestMatchers(mvc.pattern("/v3/api-docs/**")).permitAll()
-                        .requestMatchers(mvc.pattern("/swagger-resources/**")).permitAll()
-                        .requestMatchers(mvc.pattern("/webjars/**")).permitAll()
-                        .requestMatchers(mvc.pattern("/actuator/**")).permitAll()
+                        // Swagger UI - PUBLIC ACCESS
+                        .requestMatchers("/swagger-ui/**").permitAll()
+                        .requestMatchers("/swagger-ui.html").permitAll()
+                        .requestMatchers("/v3/api-docs/**").permitAll()
+                        .requestMatchers("/swagger-resources/**").permitAll()
+                        .requestMatchers("/webjars/**").permitAll()
+                        .requestMatchers("/actuator/**").permitAll()
 
-                        .requestMatchers(mvc.pattern("/api/v1/admin/**")).hasRole("SUPER_ADMIN")
-                        .requestMatchers(mvc.pattern("/api/v1/companies/**")).hasAnyRole("SUPER_ADMIN", "MANAGER")
-                        .requestMatchers(mvc.pattern(HttpMethod.GET, "/api/v1/users/**")).hasAnyRole("SUPER_ADMIN", "MANAGER")
-                        .requestMatchers(mvc.pattern(HttpMethod.POST, "/api/v1/users/**")).hasAnyRole("SUPER_ADMIN", "MANAGER")
-                        .requestMatchers(mvc.pattern(HttpMethod.PUT, "/api/v1/users/**")).hasAnyRole("SUPER_ADMIN", "MANAGER")
-                        .requestMatchers(mvc.pattern(HttpMethod.DELETE, "/api/v1/users/**")).hasRole("SUPER_ADMIN")
-                        .requestMatchers(mvc.pattern("/api/v1/customers/**")).authenticated()
-                        .requestMatchers(mvc.pattern(HttpMethod.GET, "/api/v1/tickets/**")).authenticated()
-                        .requestMatchers(mvc.pattern(HttpMethod.POST, "/api/v1/tickets/**")).authenticated()
-                        .requestMatchers(mvc.pattern(HttpMethod.PUT, "/api/v1/tickets/**")).hasAnyRole("SUPER_ADMIN", "MANAGER", "AGENT")
-                        .requestMatchers(mvc.pattern(HttpMethod.DELETE, "/api/v1/tickets/**")).hasAnyRole("SUPER_ADMIN", "MANAGER")
-                        .requestMatchers(mvc.pattern("/api/v1/dashboard/**")).authenticated()
-                        .requestMatchers(mvc.pattern("/api/v1/analytics/**")).hasAnyRole("SUPER_ADMIN", "MANAGER")
-                        .requestMatchers(mvc.pattern("/api/v1/reports/**")).hasAnyRole("SUPER_ADMIN", "MANAGER")
-                        .requestMatchers(mvc.pattern(HttpMethod.GET, "/api/v1/knowledge-base/**")).authenticated()
-                        .requestMatchers(mvc.pattern(HttpMethod.POST, "/api/v1/knowledge-base/**")).hasAnyRole("SUPER_ADMIN", "MANAGER", "AGENT")
-                        .requestMatchers(mvc.pattern(HttpMethod.PUT, "/api/v1/knowledge-base/**")).hasAnyRole("SUPER_ADMIN", "MANAGER", "AGENT")
-                        .requestMatchers(mvc.pattern(HttpMethod.DELETE, "/api/v1/knowledge-base/**")).hasAnyRole("SUPER_ADMIN", "MANAGER")
-                        .requestMatchers(mvc.pattern("/api/**")).authenticated()
-                        .anyRequest().permitAll()
-                )
-                .addFilterBefore(jwtAuthenticationFilter(jwtUtil, userDetailsService()), UsernamePasswordAuthenticationFilter.class);
+                        // API endpoints
+                        .requestMatchers("/v1/admin/**").hasRole("SUPER_ADMIN")
+                        .requestMatchers("/v1/companies/**").hasAnyRole("SUPER_ADMIN", "MANAGER")
+                        .requestMatchers("/v1/users/**").authenticated()
+                        .requestMatchers("/v1/customers/**").authenticated()
+                        .requestMatchers("/v1/tickets/**").authenticated()
+                        .requestMatchers("/v1/chat/**").authenticated()
+                        .requestMatchers("/v1/dashboard/**").authenticated()
+                        .requestMatchers("/v1/analytics/**").hasAnyRole("SUPER_ADMIN", "MANAGER")
+                        .requestMatchers("/v1/reports/**").hasAnyRole("SUPER_ADMIN", "MANAGER")
+                        .requestMatchers("/v1/knowledge-base/**").authenticated()
+                        .requestMatchers("/v1/**").authenticated()
+                        .anyRequest().permitAll())
+                .addFilterBefore(jwtAuthenticationFilter(jwtUtil, userDetailsService()),
+                        UsernamePasswordAuthenticationFilter.class);
 
         return http.build();
     }

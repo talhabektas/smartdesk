@@ -29,6 +29,16 @@ public interface DepartmentRepository extends JpaRepository<Department, Long> {
     Optional<Department> findByCompanyIdAndName(Long companyId, String name);
 
     /**
+     * Departman ismi varlığı kontrolü (şirket bazında)
+     */
+    boolean existsByNameAndCompanyId(String name, Long companyId);
+
+    /**
+     * Departman ismi varlığı kontrolü (güncellenecek departman hariç)
+     */
+    boolean existsByNameAndCompanyIdAndIdNot(String name, Long companyId, Long excludeId);
+
+    /**
      * Manager'ı olan departmanlar
      */
     List<Department> findByManagerId(Long managerId);
