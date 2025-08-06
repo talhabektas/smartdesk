@@ -203,6 +203,26 @@ public class CompanyServiceImpl implements CompanyService {
         return company.getUserCount();
     }
 
+    @Override
+    @Transactional
+    public void deleteCompany(Long id) {
+        logger.info("Deleting company: {}", id);
+
+        Company company = companyRepository.findById(id)
+                .orElseThrow(() -> new ResourceNotFoundException("Company not found with id: " + id));
+
+        // Şirkete bağlı kullanıcıların olup olmadığını kontrol et
+        if (company.getUserCount() > 0) {
+            throw new BusinessLogicException("Cannot delete company with existing users. Please reassign or delete users first.");
+        }
+
+        // Soft delete - company'yi isActive = false yapar
+        company.setIsActive(false);
+        companyRepository.save(company);
+        
+        logger.info("✅ Company deleted successfully: {}", id);
+    }
+
     /**
      * Entity'yi Response DTO'ya map eder
      */

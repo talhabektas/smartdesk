@@ -4,11 +4,13 @@ import { authDebugger } from '../../utils/authDebugger';
 import { api } from '../../services/api';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 const AuthDebugPanel: React.FC = () => {
   const { user, isAuthenticated } = useAuthStore();
   const [debugInfo, setDebugInfo] = useState<any>(null);
   const [testResults, setTestResults] = useState<any[]>([]);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
     const updateDebugInfo = () => {
@@ -89,8 +91,26 @@ const AuthDebugPanel: React.FC = () => {
   }
 
   return (
-    <div className="fixed bottom-4 right-4 z-50">
-      <Card className="w-96 max-h-96 overflow-y-auto bg-gray-900 text-white text-xs">
+    <div className={`fixed bottom-4 z-50 transition-all duration-300 ease-in-out ${
+      isCollapsed ? 'right-0' : 'right-4'
+    }`}>
+      {/* Toggle Button */}
+      <button
+        onClick={() => setIsCollapsed(!isCollapsed)}
+        className={`absolute top-4 bg-gray-900 text-white p-2 rounded-l-md shadow-lg hover:bg-gray-800 transition-all duration-200 z-10 ${
+          isCollapsed ? 'left-0' : '-left-10'
+        }`}
+        style={{ transform: isCollapsed ? 'translateX(-100%)' : 'none' }}
+      >
+        {isCollapsed ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+      </button>
+
+      {/* Debug Panel */}
+      <Card className={`transition-all duration-300 ease-in-out overflow-hidden bg-gray-900 text-white text-xs ${
+        isCollapsed 
+          ? 'w-0 opacity-0 pointer-events-none' 
+          : 'w-96 max-h-96 overflow-y-auto opacity-100'
+      }`}>
         <div className="p-4">
           <div className="flex items-center justify-between mb-4">
             <h3 className="font-bold text-sm">🔍 Auth Debug Panel</h3>

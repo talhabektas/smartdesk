@@ -54,6 +54,9 @@ export const TicketStatusBadge: React.FC<{ status: TicketStatus; size?: 'sm' | '
     [TicketStatus.RESOLVED]: 'success',
     [TicketStatus.CLOSED]: 'default',
     [TicketStatus.CANCELLED]: 'danger',
+    [TicketStatus.PENDING_MANAGER_APPROVAL]: 'warning',
+    [TicketStatus.MANAGER_APPROVED]: 'info',
+    [TicketStatus.PENDING_ADMIN_APPROVAL]: 'secondary',
   };
 
   const statusLabels: Record<TicketStatus, string> = {
@@ -64,6 +67,9 @@ export const TicketStatusBadge: React.FC<{ status: TicketStatus; size?: 'sm' | '
     [TicketStatus.RESOLVED]: 'Çözüldü',
     [TicketStatus.CLOSED]: 'Kapatıldı',
     [TicketStatus.CANCELLED]: 'İptal Edildi',
+    [TicketStatus.PENDING_MANAGER_APPROVAL]: 'Manager Onayı Bekliyor',
+    [TicketStatus.MANAGER_APPROVED]: 'Manager Onayladı',
+    [TicketStatus.PENDING_ADMIN_APPROVAL]: 'Admin Onayı Bekliyor',
   };
 
   return (

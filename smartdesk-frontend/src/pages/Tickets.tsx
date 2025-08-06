@@ -6,7 +6,7 @@ import { Input } from '../components/ui/Input';
 import { Select } from '../components/ui/Select';
 import { Badge } from '../components/ui/Badge';
 import { Modal } from '../components/ui/Modal';
-import { Plus, Search, Filter, Eye, Edit, MessageCircle } from 'lucide-react';
+import { Plus, Search, Filter, Eye, Edit, MessageCircle, CheckCircle, XCircle, Clock4 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
 import { Ticket, TicketStatus, TicketPriority, TicketCategory, TicketSource } from '../types';
 import { ticketService } from '../services/ticketService';
@@ -26,6 +26,7 @@ const Tickets: React.FC = () => {
   const [showChatWindow, setShowChatWindow] = useState(false);
   const [selectedTicketForEdit, setSelectedTicketForEdit] = useState<Ticket | null>(null);
   const [showEditModal, setShowEditModal] = useState(false);
+  const [approvalLoading, setApprovalLoading] = useState<number | null>(null);
 
   useEffect(() => {
     loadTickets();
@@ -34,13 +35,40 @@ const Tickets: React.FC = () => {
   const loadTickets = async () => {
     try {
       setLoading(true);
+      
+      // Get company ID from user or JWT token as fallback
+      let companyId = user?.company?.id;
+      if (!companyId) {
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            companyId = payload.companyId;
+          } catch (e) {
+            console.warn('Failed to decode JWT token for company ID');
+          }
+        }
+      }
+      
       const response = await ticketService.getTickets({
-        companyId: user?.company?.id || 1
+        companyId: companyId || 1,
+        userRole: user?.role,
+        userId: user?.id
       });
       console.log('🎫 Ticket loading response:', response);
       console.log('🎫 Response data:', response.data);
       console.log('🎫 Setting tickets:', response.data || []);
       console.log('🎫 Data type:', typeof response.data, Array.isArray(response.data));
+      
+      // Debug: Log all ticket statuses
+      if (Array.isArray(response.data)) {
+        const statusCounts = response.data.reduce((acc: any, ticket: any) => {
+          acc[ticket.status] = (acc[ticket.status] || 0) + 1;
+          return acc;
+        }, {});
+        console.log('🎫 Ticket status counts:', statusCounts);
+      }
+      
       setTickets(Array.isArray(response.data) ? response.data : []);
     } catch (error) {
       console.error('Failed to load tickets:', error);
@@ -57,6 +85,11 @@ const Tickets: React.FC = () => {
     const matchesStatus = !statusFilter || ticket.status === statusFilter;
     const matchesPriority = !priorityFilter || ticket.priority === priorityFilter;
 
+    // Debug logging for RESOLVED tickets
+    if (ticket.status === 'RESOLVED') {
+      console.log('🔍 Found RESOLVED ticket:', ticket.ticketNumber, 'Filter:', statusFilter, 'Match:', matchesStatus);
+    }
+
     return matchesSearch && matchesStatus && matchesPriority;
   });
 
@@ -65,8 +98,11 @@ const Tickets: React.FC = () => {
       case TicketStatus.NEW: return 'bg-blue-100 text-blue-800';
       case TicketStatus.OPEN: return 'bg-green-100 text-green-800';
       case TicketStatus.IN_PROGRESS: return 'bg-yellow-100 text-yellow-800';
-      case TicketStatus.RESOLVED: return 'bg-purple-100 text-purple-800';
+      case TicketStatus.RESOLVED: return 'bg-green-100 text-green-800';
       case TicketStatus.CLOSED: return 'bg-gray-100 text-gray-800';
+      case TicketStatus.PENDING_MANAGER_APPROVAL: return 'bg-orange-100 text-orange-800';
+      case TicketStatus.MANAGER_APPROVED: return 'bg-indigo-100 text-indigo-800';
+      case TicketStatus.PENDING_ADMIN_APPROVAL: return 'bg-pink-100 text-pink-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -123,6 +159,134 @@ const Tickets: React.FC = () => {
     console.log('Edit ticket:', ticket.id, 'User role:', user?.role);
     setSelectedTicketForEdit(ticket);
     setShowEditModal(true);
+  };
+
+  // Approval workflow handlers
+  const handleResolveTicket = async (ticketId: number) => {
+    try {
+      setApprovalLoading(ticketId);
+      await ticketService.resolveTicket(ticketId, 'Ticket resolved - awaiting manager approval');
+      await loadTickets(); // Refresh the ticket list
+    } catch (error) {
+      console.error('Failed to resolve ticket:', error);
+    } finally {
+      setApprovalLoading(null);
+    }
+  };
+
+  const handleManagerApproval = async (ticketId: number) => {
+    try {
+      setApprovalLoading(ticketId);
+      await ticketService.approveByManager(ticketId, 'Approved by manager');
+      await loadTickets(); // Refresh the ticket list
+    } catch (error) {
+      console.error('Failed to approve ticket as manager:', error);
+    } finally {
+      setApprovalLoading(null);
+    }
+  };
+
+  const handleAdminApproval = async (ticketId: number) => {
+    try {
+      setApprovalLoading(ticketId);
+      await ticketService.approveByAdmin(ticketId, 'Final approval by admin');
+      await loadTickets(); // Refresh the ticket list
+    } catch (error) {
+      console.error('Failed to approve ticket as admin:', error);
+    } finally {
+      setApprovalLoading(null);
+    }
+  };
+
+  const handleRejectApproval = async (ticketId: number) => {
+    try {
+      setApprovalLoading(ticketId);
+      await ticketService.rejectApproval(ticketId, 'Approval rejected - requires revision');
+      await loadTickets(); // Refresh the ticket list
+    } catch (error) {
+      console.error('Failed to reject approval:', error);
+    } finally {
+      setApprovalLoading(null);
+    }
+  };
+
+  // Render approval buttons based on ticket status and user role
+  const renderApprovalButtons = (ticket: Ticket) => {
+    if (!user) return null;
+
+    const userRole = user.role;
+    const ticketStatus = ticket.status as string;
+    const isLoading = approvalLoading === ticket.id;
+
+
+    // IN_PROGRESS tickets - can be resolved for approval by MANAGER or AGENT
+    if (ticketStatus === 'IN_PROGRESS' && (userRole === 'MANAGER' || userRole === 'AGENT')) {
+      return (
+        <Button 
+          variant="ghost" 
+          size="sm"
+          onClick={() => handleResolveTicket(ticket.id)}
+          disabled={isLoading}
+          title="Send for Manager Approval"
+        >
+          {isLoading ? <Clock4 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4 text-blue-600" />}
+        </Button>
+      );
+    }
+
+    // PENDING_MANAGER_APPROVAL - can be approved by MANAGER
+    if (ticketStatus === 'PENDING_MGR' && userRole === 'MANAGER') {
+      return (
+        <>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => handleManagerApproval(ticket.id)}
+            disabled={isLoading}
+            title="Approve as Manager"
+          >
+            {isLoading ? <Clock4 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4 text-green-600" />}
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => handleRejectApproval(ticket.id)}
+            disabled={isLoading}
+            title="Reject Approval"
+          >
+            <XCircle className="w-4 h-4 text-red-600" />
+          </Button>
+        </>
+      );
+    }
+
+    // PENDING_ADMIN_APPROVAL - can be approved by SUPER_ADMIN
+    if (ticketStatus === 'PENDING_ADMIN' && userRole === 'SUPER_ADMIN') {
+      return (
+        <>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => handleAdminApproval(ticket.id)}
+            disabled={isLoading}
+            title="Final Approval (Resolve Ticket)"
+          >
+            {isLoading ? <Clock4 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4 text-green-600" />}
+          </Button>
+          <Button 
+            variant="ghost" 
+            size="sm"
+            onClick={() => handleRejectApproval(ticket.id)}
+            disabled={isLoading}
+            title="Reject Final Approval"
+          >
+            <XCircle className="w-4 h-4 text-red-600" />
+          </Button>
+        </>
+      );
+    }
+
+    return null;
   };
 
   if (loading) {
@@ -253,7 +417,7 @@ const Tickets: React.FC = () => {
                   </p>
 
                   <div className="flex items-center gap-4 text-sm text-gray-500">
-                    <span>Customer: {ticket.customer?.companyName || 'Unknown'}</span>
+                    <span>Customer: {ticket.customerName || ticket.customerCompanyName || ticket.customer?.companyName || 'Unknown'}</span>
                     <span>Created: {formatDate(ticket.createdAt)}</span>
                     {ticket.assignedAgent && (
                       <span>Assigned to: {ticket.assignedAgent.firstName} {ticket.assignedAgent.lastName}</span>
@@ -278,6 +442,10 @@ const Tickets: React.FC = () => {
                       <Edit className="w-4 h-4" />
                     </Button>
                   )}
+                  
+                  {/* Approval Workflow Buttons */}
+                  {renderApprovalButtons(ticket)}
+                  
                   <Button 
                     variant="ghost" 
                     size="sm"
@@ -369,10 +537,34 @@ const CreateTicketModal: React.FC<CreateTicketModalProps> = ({ isOpen, onClose, 
     setLoading(true);
 
     try {
-      // Add companyId from auth store
+      // Debug user information
+      console.log('🔍 Current user for ticket creation:', user);
+      console.log('🔍 User company:', user?.company);
+      console.log('🔍 User company ID:', user?.company?.id);
+      console.log('🔍 User role:', user?.role);
+      console.log('🔍 User ID:', user?.id);
+      
+      // Get company ID from JWT token if user.company is missing
+      let companyId = user?.company?.id;
+      if (!companyId) {
+        // Try to get from JWT token as fallback
+        const token = localStorage.getItem('accessToken');
+        if (token) {
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            companyId = payload.companyId;
+            console.log('🔍 Extracted company ID from JWT:', companyId);
+          } catch (e) {
+            console.warn('Failed to decode JWT token for company ID');
+          }
+        }
+      }
+      
+      // Add companyId and customerId - CUSTOMER should use their own info
       const ticketData = {
         ...formData,
-        companyId: user?.company?.id || 1 // Default to 1 if no company
+        companyId: companyId || 1, // Default to 1 as last resort
+        customerId: user?.role === 'CUSTOMER' ? user.id : formData.customerId // Customer creates ticket for themselves
       };
 
       console.log('🎫 Frontend sending ticket data:', ticketData);

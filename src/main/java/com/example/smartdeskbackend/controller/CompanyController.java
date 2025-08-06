@@ -267,6 +267,35 @@ public class CompanyController {
     }
 
     /**
+     * Şirket sil (sadece SUPER_ADMIN)
+     */
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<?> deleteCompany(@PathVariable Long id) {
+        logger.info("Deleting company: {}", id);
+
+        try {
+            companyService.deleteCompany(id);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Company deleted successfully");
+            response.put("companyId", id);
+            response.put("timestamp", java.time.LocalDateTime.now());
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("Error deleting company: {}", id, e);
+
+            HttpStatus status = e.getMessage().contains("not found") ?
+                    HttpStatus.NOT_FOUND : HttpStatus.BAD_REQUEST;
+
+            return ResponseEntity.status(status)
+                    .body(createErrorResponse("COMPANY_DELETE_ERROR", e.getMessage()));
+        }
+    }
+
+    /**
      * Standart hata response'u oluşturur
      */
     private Map<String, Object> createErrorResponse(String errorCode, String message) {

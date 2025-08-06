@@ -4,6 +4,7 @@ package com.example.smartdeskbackend.dto.request.ticket;
 
 import com.example.smartdeskbackend.enums.TicketCategory;
 import com.example.smartdeskbackend.enums.TicketPriority;
+import com.example.smartdeskbackend.enums.TicketStatus;
 import jakarta.validation.constraints.Size;
 
 public class UpdateTicketRequest {
@@ -16,6 +17,8 @@ public class UpdateTicketRequest {
     private TicketPriority priority;
 
     private TicketCategory category;
+
+    private TicketStatus status;
 
     private String tags;
 
@@ -36,6 +39,9 @@ public class UpdateTicketRequest {
 
     public TicketCategory getCategory() { return category; }
     public void setCategory(TicketCategory category) { this.category = category; }
+
+    public TicketStatus getStatus() { return status; }
+    public void setStatus(TicketStatus status) { this.status = status; }
 
     public String getTags() { return tags; }
     public void setTags(String tags) { this.tags = tags; }

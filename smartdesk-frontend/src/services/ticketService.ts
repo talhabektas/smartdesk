@@ -2,7 +2,7 @@ import { apiClient } from './apiClient';
 import { Ticket, CreateTicketRequest, UpdateTicketRequest } from '../types';
 
 export const ticketService = {
-    // Get all tickets for user's company
+    // Get all tickets - SUPER_ADMIN gets all, CUSTOMER gets own tickets, others get company tickets
     async getTickets(params?: {
         page?: number;
         size?: number;
@@ -10,6 +10,8 @@ export const ticketService = {
         priority?: string;
         search?: string;
         companyId?: number;
+        userRole?: string;
+        userId?: number;
     }) {
         // Use search endpoint with companyId
         if (params?.search || params?.status || params?.priority) {
@@ -30,20 +32,57 @@ export const ticketService = {
                 totalPages: response.data?.totalPages || 0
             };
         } else {
-            // Use company endpoint for basic listing
-            const response = await apiClient.get(`/tickets/company/${params?.companyId || 1}`, { 
-                params: { 
-                    page: params?.page || 0, 
-                    size: params?.size || 20 
-                } 
-            });
-            console.log('🎫 TicketService raw response:', response);
-            // Backend returns response with 'tickets' field
-            return {
-                data: response.data?.tickets || [],
-                totalElements: response.data?.totalElements || 0,
-                totalPages: response.data?.totalPages || 0
-            };
+            // SUPER_ADMIN gets all tickets
+            if (params?.userRole === 'SUPER_ADMIN') {
+                console.log('🎫 SUPER_ADMIN detected - fetching ALL tickets');
+                const response = await apiClient.get('/tickets/all', { 
+                    params: { 
+                        page: params?.page || 0, 
+                        size: params?.size || 20 
+                    } 
+                });
+                console.log('🎫 TicketService ALL tickets response:', response);
+                return {
+                    data: response.data?.tickets || [],
+                    totalElements: response.data?.totalElements || 0,
+                    totalPages: response.data?.totalPages || 0
+                };
+            } 
+            // CUSTOMER gets only their own tickets
+            else if (params?.userRole === 'CUSTOMER') {
+                console.log('🎫 CUSTOMER detected - fetching my tickets');
+                const response = await apiClient.get('/tickets/my', { 
+                    params: { 
+                        page: params?.page || 0, 
+                        size: params?.size || 20,
+                        sort: 'createdAt,desc'  // Yeni ticket'lar en üstte
+                    } 
+                });
+                console.log('🎫 TicketService my tickets response:', response);
+                return {
+                    data: response.data?.tickets || [],
+                    totalElements: response.data?.totalElements || 0,
+                    totalPages: response.data?.totalPages || 0
+                };
+            }
+            // Others (MANAGER, AGENT) get company tickets
+            else {
+                console.log('🎫 MANAGER/AGENT detected - fetching company tickets for companyId:', params?.companyId);
+                const response = await apiClient.get(`/tickets/company/${params?.companyId || 1}`, { 
+                    params: { 
+                        page: params?.page || 0, 
+                        size: params?.size || 20,
+                        sort: 'createdAt,desc'  // Yeni ticket'lar en üstte
+                    } 
+                });
+                console.log('🎫 TicketService company tickets response:', response);
+                // Backend returns custom response with "tickets" array (not "content")
+                return {
+                    data: response.data?.tickets || [],
+                    totalElements: response.data?.totalElements || 0,
+                    totalPages: response.data?.totalPages || 0
+                };
+            }
         }
     },
 
@@ -206,6 +245,40 @@ export const ticketService = {
     async getTicketCreationTrend(companyId: number, days = 30) {
         const response = await apiClient.get('/tickets/trends/creation', {
             params: { companyId, days }
+        });
+        return response.data;
+    },
+
+    // ============ APPROVAL WORKFLOW METHODS ============
+
+    // Resolve ticket for manager approval
+    async resolveTicket(id: number, resolutionSummary?: string) {
+        const response = await apiClient.patch(`/tickets/${id}/resolve`, {
+            resolutionSummary: resolutionSummary || ''
+        });
+        return response.data;
+    },
+
+    // Manager approval
+    async approveByManager(id: number, approvalComment?: string) {
+        const response = await apiClient.patch(`/tickets/${id}/approve-manager`, {
+            approvalComment: approvalComment || ''
+        });
+        return response.data;
+    },
+
+    // Admin final approval
+    async approveByAdmin(id: number, finalComment?: string) {
+        const response = await apiClient.patch(`/tickets/${id}/approve-admin`, {
+            finalComment: finalComment || ''
+        });
+        return response.data;
+    },
+
+    // Reject approval
+    async rejectApproval(id: number, rejectionReason: string) {
+        const response = await apiClient.patch(`/tickets/${id}/reject-approval`, {
+            rejectionReason
         });
         return response.data;
     }

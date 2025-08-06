@@ -14,4 +14,12 @@ public interface NotificationService {
     List<Notification> getUnreadNotificationsForUser(Long userId);
     long countUnreadNotificationsForUser(Long userId);
     void deleteNotification(Long notificationId, Long userId);
+    
+    // Ticket specific notification methods
+    void notifyNewTicketCreated(Long ticketId, Long companyId, String ticketNumber, String customerName);
+    void notifyTicketAssigned(Long ticketId, Long agentId, String ticketNumber);
+    void notifyTicketStatusChanged(Long ticketId, String oldStatus, String newStatus, String ticketNumber);
+    void notifyTicketNeedsAttention(Long ticketId, Long companyId, String ticketNumber);
+    void notifyPendingApproval(Long ticketId, String approvalType, Long approverId, String ticketNumber);
+    void notifyApprovalCompleted(Long ticketId, String approvalType, boolean approved, Long requesterId, String ticketNumber);
 }

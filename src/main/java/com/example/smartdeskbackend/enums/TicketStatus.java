@@ -9,6 +9,9 @@ public enum TicketStatus {
     IN_PROGRESS("IN_PROGRESS", "İşlemde", "Üzerinde çalışılan bilet"),
     PENDING("PENDING", "Beklemede", "Müşteri veya başka departman bekleniyor"),
     RESOLVED("RESOLVED", "Çözülmüş", "Çözüm bulunmuş bilet"),
+    PENDING_MANAGER_APPROVAL("PENDING_MGR", "Manager Onayı Bekliyor", "Manager onayı beklenen bilet"),
+    MANAGER_APPROVED("MGR_APPROVED", "Manager Onaylandı", "Manager tarafından onaylanmış bilet"),
+    PENDING_ADMIN_APPROVAL("PENDING_ADMIN", "Admin Onayı Bekliyor", "Admin onayı beklenen bilet"),
     CLOSED("CLOSED", "Kapatılmış", "Tamamlanmış ve kapatılmış bilet"),
     ESCALATED("ESCALATED", "Yükseltilmiş", "Üst seviyeye yönlendirilmiş bilet");
 

@@ -48,6 +48,13 @@ public interface TicketService {
     Page<TicketResponse> getTicketsByCompany(Long companyId, Pageable pageable);
 
     /**
+     * Tüm ticketları getir (SUPER_ADMIN için)
+     * @param pageable Pagination bilgisi
+     * @return Tüm ticketlar
+     */
+    Page<TicketResponse> getAllTickets(Pageable pageable);
+
+    /**
      * Belirli müşterinin ticketlarını getir
      * @param customerId Müşteri ID
      * @param pageable Sayfalama bilgisi
@@ -62,6 +69,14 @@ public interface TicketService {
      * @return Page<TicketResponse>
      */
     Page<TicketResponse> getTicketsByAgent(Long agentId, Pageable pageable);
+
+    /**
+     * CUSTOMER kullanıcının kendi ticketlarını getir (User ID ile)
+     * @param userId User ID (CUSTOMER role)
+     * @param pageable Sayfalama bilgisi
+     * @return Page<TicketResponse>
+     */
+    Page<TicketResponse> getTicketsByUserId(Long userId, Pageable pageable);
 
     // ============ ARAMA ve FİLTRELEME ============
 
@@ -245,4 +260,42 @@ public interface TicketService {
      * @return List<Object[]> trend verileri
      */
     List<Object[]> getTicketCreationTrend(Long companyId, int days);
+
+    // ============ APPROVAL WORKFLOW METHODS ============
+
+    /**
+     * Ticket'ı RESOLVED yapıp MANAGER onayına gönder
+     * @param id Ticket ID
+     * @param resolutionSummary Çözüm özeti
+     * @param userId İşlemi yapan kullanıcı ID
+     * @return TicketDetailResponse
+     */
+    TicketDetailResponse resolveTicketForApproval(Long id, String resolutionSummary, Long userId);
+
+    /**
+     * MANAGER onayı - SUPER_ADMIN onayına gönder
+     * @param id Ticket ID
+     * @param approvalComment Onay yorumu
+     * @param managerId Manager ID
+     * @return TicketDetailResponse
+     */
+    TicketDetailResponse approveByManager(Long id, String approvalComment, Long managerId);
+
+    /**
+     * SUPER_ADMIN final onayı - CLOSED yapar
+     * @param id Ticket ID
+     * @param finalComment Final yorum
+     * @param adminId Admin ID
+     * @return TicketDetailResponse
+     */
+    TicketDetailResponse approveByAdmin(Long id, String finalComment, Long adminId);
+
+    /**
+     * Onayı reddet - önceki duruma geri döndür
+     * @param id Ticket ID
+     * @param rejectionReason Red sebebi
+     * @param userId İşlemi yapan kullanıcı ID
+     * @return TicketDetailResponse
+     */
+    TicketDetailResponse rejectApproval(Long id, String rejectionReason, Long userId);
 }

@@ -16,6 +16,7 @@ public class TicketResponse {
     private String source;
     private String customerName;
     private String customerEmail;
+    private String customerCompanyName;
     private String assignedAgentName;
     private String departmentName;
     private LocalDateTime createdAt;
@@ -59,6 +60,9 @@ public class TicketResponse {
 
     public String getCustomerEmail() { return customerEmail; }
     public void setCustomerEmail(String customerEmail) { this.customerEmail = customerEmail; }
+
+    public String getCustomerCompanyName() { return customerCompanyName; }
+    public void setCustomerCompanyName(String customerCompanyName) { this.customerCompanyName = customerCompanyName; }
 
     public String getAssignedAgentName() { return assignedAgentName; }
     public void setAssignedAgentName(String assignedAgentName) { this.assignedAgentName = assignedAgentName; }

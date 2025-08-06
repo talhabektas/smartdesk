@@ -39,7 +39,7 @@ public class Ticket extends AuditableEntity {
     private TicketPriority priority = TicketPriority.NORMAL;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", nullable = false, length = 20)
+    @Column(name = "status", nullable = false, length = 50)
     private TicketStatus status = TicketStatus.NEW;
 
     @Enumerated(EnumType.STRING)

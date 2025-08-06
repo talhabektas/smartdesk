@@ -2,6 +2,7 @@
 package com.example.smartdeskbackend.entity;
 
 import com.example.smartdeskbackend.entity.base.AuditableEntity;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import jakarta.persistence.*;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
@@ -25,9 +26,11 @@ public class Notification extends AuditableEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "recipient_user_id") // Bildirimi alan kullanıcı
+    @JsonIgnoreProperties({"notifications", "company", "department", "password", "passwordResetToken", "emailVerificationToken"})
     private User recipientUser;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "company_id") // Multi-tenant yapıya uygun
+    @JsonIgnoreProperties({"users", "departments", "customers", "tickets"})
     private Company company;
 }

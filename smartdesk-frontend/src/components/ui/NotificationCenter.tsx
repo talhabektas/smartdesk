@@ -23,6 +23,7 @@ import { useAuthStore } from '../../store/authStore';
 import { webSocketService } from '../../services/websocket';
 import { api } from '../../services/api';
 import { toast } from 'react-hot-toast';
+import { notificationService, Notification as APINotification } from '../../services/notificationService';
 
 interface Notification {
   id: number;
@@ -44,64 +45,101 @@ const NotificationCenter: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<'all' | 'unread' | 'tickets' | 'system'>('all');
 
+  // Helper functions for API transformation
+  const mapNotificationType = (apiType: string): Notification['type'] => {
+    switch (apiType) {
+      case 'TICKET_CREATED':
+      case 'TICKET_ASSIGNED':
+      case 'TICKET_STATUS_CHANGED':
+        return 'TICKET_UPDATE';
+      case 'NEW_COMMENT':
+        return 'NEW_COMMENT';
+      case 'TICKET_ASSIGNED':
+        return 'ASSIGNMENT';
+      case 'TICKET_MANAGER_APPROVED':
+      case 'TICKET_ADMIN_APPROVED':
+        return 'SUCCESS';
+      case 'TICKET_APPROVAL_REJECTED':
+        return 'ERROR';
+      case 'TICKET_REMINDER':
+      case 'TICKET_SLA_WARNING':
+        return 'WARNING';
+      default:
+        return 'INFO';
+    }
+  };
+
+  const getNotificationTitle = (apiType: string): string => {
+    switch (apiType) {
+      case 'TICKET_CREATED':
+        return 'New Ticket';
+      case 'TICKET_ASSIGNED':
+        return 'Ticket Assigned';
+      case 'TICKET_STATUS_CHANGED':
+        return 'Ticket Updated';
+      case 'NEW_COMMENT':
+        return 'New Comment';
+      case 'TICKET_MANAGER_APPROVED':
+        return 'Manager Approved';
+      case 'TICKET_ADMIN_APPROVED':
+        return 'Admin Approved';
+      case 'TICKET_APPROVAL_REJECTED':
+        return 'Approval Rejected';
+      case 'TICKET_REMINDER':
+        return 'Ticket Reminder';
+      case 'TICKET_SLA_WARNING':
+        return 'SLA Warning';
+      default:
+        return 'Notification';
+    }
+  };
+
+  const extractEntityIdFromUrl = (url: string | null): number | undefined => {
+    if (!url) return undefined;
+    const match = url.match(/\/tickets\/(\d+)/);
+    return match ? parseInt(match[1]) : undefined;
+  };
+
   // Load notifications from API
   const loadNotifications = useCallback(async () => {
     if (!user) return;
 
     try {
       setLoading(true);
-      const response = await api.get(`/notifications/user/${user.id}`);
-      setNotifications(response.data.content || []);
+      console.log('🔔 Loading notifications for user:', user.id);
+      
+      const response = await notificationService.getUserNotifications(user.id, {
+        page: 0,
+        size: 50,
+        sortBy: 'sentAt',
+        sortDir: 'desc'
+      });
+      
+      console.log('🔔 API Response:', response);
+      
+      // Transform API notifications to component format
+      const transformedNotifications: Notification[] = response.notifications.map(apiNotification => ({
+        id: apiNotification.id,
+        type: mapNotificationType(apiNotification.type),
+        title: getNotificationTitle(apiNotification.type),
+        message: apiNotification.message,
+        createdAt: apiNotification.sentAt,
+        isRead: apiNotification.isRead,
+        userId: apiNotification.recipientUser.id,
+        relatedEntityId: extractEntityIdFromUrl(apiNotification.targetUrl),
+        relatedEntityType: 'TICKET',
+        actionUrl: apiNotification.targetUrl
+      }));
+      
+      setNotifications(transformedNotifications);
+      console.log('🔔 Loaded', transformedNotifications.length, 'notifications');
+      
     } catch (error: any) {
-      console.error('Failed to load notifications:', error);
-      // Use mock data for demo
-      setNotifications([
-        {
-          id: 1,
-          type: 'TICKET_UPDATE',
-          title: 'Ticket Updated',
-          message: 'Ticket #TK-2024-001 status changed to In Progress',
-          createdAt: new Date(Date.now() - 300000).toISOString(), // 5 min ago
-          isRead: false,
-          userId: user.id,
-          relatedEntityId: 1,
-          relatedEntityType: 'TICKET',
-          actionUrl: '/tickets/1'
-        },
-        {
-          id: 2,
-          type: 'NEW_COMMENT',
-          title: 'New Comment',
-          message: 'Ali Kaya added a comment to your ticket',
-          createdAt: new Date(Date.now() - 900000).toISOString(), // 15 min ago
-          isRead: false,
-          userId: user.id,
-          relatedEntityId: 2,
-          relatedEntityType: 'TICKET',
-          actionUrl: '/tickets/2'
-        },
-        {
-          id: 3,
-          type: 'ASSIGNMENT',
-          title: 'New Assignment',
-          message: 'You have been assigned to ticket #TK-2024-003',
-          createdAt: new Date(Date.now() - 1800000).toISOString(), // 30 min ago
-          isRead: true,
-          userId: user.id,
-          relatedEntityId: 3,
-          relatedEntityType: 'TICKET',
-          actionUrl: '/tickets/3'
-        },
-        {
-          id: 4,
-          type: 'SUCCESS',
-          title: 'System Update',
-          message: 'System maintenance completed successfully',
-          createdAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
-          isRead: true,
-          userId: user.id
-        }
-      ]);
+      console.error('❌ Failed to load notifications:', error);
+      // Show error toast
+      toast.error('Failed to load notifications');
+      // Set empty array on error
+      setNotifications([]);
     } finally {
       setLoading(false);
     }
@@ -124,8 +162,20 @@ const NotificationCenter: React.FC = () => {
       actionUrl: message.data?.actionUrl
     };
 
-    // Add to notifications list
-    setNotifications(prev => [newNotification, ...prev]);
+    // Add to notifications list (avoid duplicates based on message content and time)
+    setNotifications(prev => {
+      const isDuplicate = prev.some(n => 
+        n.message === newNotification.message && 
+        Math.abs(new Date(n.createdAt).getTime() - new Date(newNotification.createdAt).getTime()) < 1000
+      );
+      
+      if (isDuplicate) {
+        console.log('Skipping duplicate notification:', newNotification.message);
+        return prev;
+      }
+      
+      return [newNotification, ...prev];
+    });
 
     // Show toast notification
     switch (message.type) {
@@ -145,43 +195,57 @@ const NotificationCenter: React.FC = () => {
 
   // Mark notification as read
   const markAsRead = async (notificationId: number) => {
+    // Optimistic update first
+    setNotifications(prev => 
+      prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n)
+    );
+
     try {
-      await api.patch(`/notifications/${notificationId}/read`);
-      setNotifications(prev => 
-        prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n)
-      );
+      await notificationService.markNotificationAsRead(notificationId);
+      console.log('✅ Notification marked as read:', notificationId);
     } catch (error) {
       console.error('Failed to mark notification as read:', error);
-      // Optimistic update
+      toast.error('Failed to mark notification as read');
+      // Revert optimistic update on error
       setNotifications(prev => 
-        prev.map(n => n.id === notificationId ? { ...n, isRead: true } : n)
+        prev.map(n => n.id === notificationId ? { ...n, isRead: false } : n)
       );
     }
   };
 
   // Mark all as read
   const markAllAsRead = async () => {
+    if (!user) return;
+
+    // Optimistic update first
+    setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+
     try {
-      await api.patch(`/notifications/user/${user?.id}/read-all`);
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      await api.patch(`/notifications/user/${user.id}/read-all`);
       toast.success('All notifications marked as read');
+      console.log('✅ All notifications marked as read for user:', user.id);
     } catch (error) {
       console.error('Failed to mark all as read:', error);
-      // Optimistic update
-      setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
+      toast.error('Failed to mark all notifications as read');
+      // On error, reload notifications to get the correct state
+      await loadNotifications();
     }
   };
 
   // Delete notification
   const deleteNotification = async (notificationId: number) => {
+    // Optimistic update first
+    setNotifications(prev => prev.filter(n => n.id !== notificationId));
+
     try {
-      await api.delete(`/notifications/${notificationId}`);
-      setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      await notificationService.deleteNotification(notificationId);
       toast.success('Notification deleted');
+      console.log('✅ Notification deleted:', notificationId);
     } catch (error) {
       console.error('Failed to delete notification:', error);
-      // Optimistic update
-      setNotifications(prev => prev.filter(n => n.id !== notificationId));
+      toast.error('Failed to delete notification');
+      // On error, reload notifications to get the correct state
+      await loadNotifications();
     }
   };
 

@@ -43,7 +43,30 @@ public class TicketController {
     private JwtUtil jwtUtil;
 
     /**
-     * Ticket detaylarını getir
+     * Tüm ticketları getir (sadece SUPER_ADMIN) - ÖNEMLİ: /{id} mapping'den ÖNCE olmalı
+     */
+    @GetMapping("/all")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<?> getAllTickets(@PageableDefault(size = 20) Pageable pageable) {
+        logger.info("Getting ALL tickets for SUPER_ADMIN");
+
+        try {
+            Page<TicketResponse> tickets = ticketService.getAllTickets(pageable);
+
+            Map<String, Object> response = createPageResponse(tickets);
+            response.put("scope", "all");
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("Error getting all tickets", e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(createErrorResponse("ALL_TICKETS_FETCH_ERROR", e.getMessage()));
+        }
+    }
+
+    /**
+     * Ticket detaylarını getir - ÖNEMLİ: /all endpoint'inden SONRA olmalı
      */
     @GetMapping("/{id}")
     @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('AGENT') or @ticketSecurityService.hasAccessToTicket(#id, authentication.principal.id)")
@@ -84,7 +107,7 @@ public class TicketController {
      * Şirketteki ticketları getir
      */
     @GetMapping("/company/{companyId}")
-    @PreAuthorize("hasRole('SUPER_ADMIN') or (hasRole('MANAGER') and @securityService.isFromSameCompany(#companyId))")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or ((hasRole('MANAGER') or hasRole('AGENT')) and @securityService.isFromSameCompany(#companyId))")
     public ResponseEntity<?> getTicketsByCompany(
             @PathVariable Long companyId,
             @PageableDefault(size = 20) Pageable pageable) {
@@ -257,6 +280,43 @@ public class TicketController {
             logger.error("Error searching tickets", e);
             return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                     .body(createErrorResponse("TICKET_SEARCH_ERROR", e.getMessage()));
+        }
+    }
+
+    /**
+     * CUSTOMER kullanıcının kendi ticketları - ÖNEMLİ: /customer/{customerId} endpoint'inden ÖNCE olmalı
+     */
+    @GetMapping("/my")
+    @PreAuthorize("hasRole('CUSTOMER')")
+    public ResponseEntity<?> getMyTickets(
+            @PageableDefault(size = 20) Pageable pageable,
+            HttpServletRequest request) {
+
+        logger.info("🎫 CUSTOMER getting own tickets");
+
+        try {
+            String token = extractTokenFromRequest(request);
+            if (token == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(createErrorResponse("UNAUTHORIZED", "Token not found"));
+            }
+
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            logger.info("🎫 CUSTOMER userId: {}", userId);
+
+            Page<TicketResponse> tickets = ticketService.getTicketsByUserId(userId, pageable);
+
+            Map<String, Object> response = createPageResponse(tickets);
+            response.put("userId", userId);
+            response.put("scope", "my");
+
+            logger.info("🎫 Returning {} tickets for CUSTOMER userId: {}", tickets.getTotalElements(), userId);
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("Error getting my tickets", e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(createErrorResponse("MY_TICKETS_ERROR", e.getMessage()));
         }
     }
 
@@ -895,6 +955,169 @@ public class TicketController {
         response.put("hasNext", tickets.hasNext());
         response.put("hasPrevious", tickets.hasPrevious());
         return response;
+    }
+
+    // ============ APPROVAL WORKFLOW ENDPOINTS ============
+
+    /**
+     * AGENT/MANAGER ticket'ı RESOLVED yapıp MANAGER onayına gönder
+     */
+    @PatchMapping("/{id}/resolve")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('MANAGER') or hasRole('AGENT')")
+    public ResponseEntity<?> resolveTicket(
+            @PathVariable Long id,
+            @RequestBody(required = false) Map<String, String> requestBody,
+            HttpServletRequest request) {
+
+        logger.info("🎯 Resolving ticket for manager approval: {}", id);
+
+        try {
+            String token = extractTokenFromRequest(request);
+            if (token == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(createErrorResponse("UNAUTHORIZED", "Token not found"));
+            }
+
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            String resolutionSummary = requestBody != null ? requestBody.get("resolutionSummary") : "";
+
+            // Ticket'ı RESOLVED duruma getir ve MANAGER onayına gönder
+            TicketDetailResponse ticket = ticketService.resolveTicketForApproval(id, resolutionSummary, userId);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Ticket resolved and sent for manager approval");
+            response.put("ticket", ticket);
+            response.put("timestamp", LocalDateTime.now());
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("❌ Error resolving ticket: {}", id, e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(createErrorResponse("RESOLVE_TICKET_ERROR", e.getMessage()));
+        }
+    }
+
+    /**
+     * MANAGER ticket'ı onaylar - SUPER_ADMIN onayına gönderir
+     */
+    @PatchMapping("/{id}/approve-manager")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('MANAGER')")
+    public ResponseEntity<?> approveByManager(
+            @PathVariable Long id,
+            @RequestBody(required = false) Map<String, String> requestBody,
+            HttpServletRequest request) {
+
+        logger.info("🎯 Manager approving ticket: {}", id);
+
+        try {
+            String token = extractTokenFromRequest(request);
+            if (token == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(createErrorResponse("UNAUTHORIZED", "Token not found"));
+            }
+
+            Long managerId = jwtUtil.getUserIdFromToken(token);
+            String approvalComment = requestBody != null ? requestBody.get("approvalComment") : "";
+
+            // MANAGER onayı - SUPER_ADMIN onayına gönder
+            TicketDetailResponse ticket = ticketService.approveByManager(id, approvalComment, managerId);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Ticket approved by manager and sent for admin approval");
+            response.put("ticket", ticket);
+            response.put("timestamp", LocalDateTime.now());
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("❌ Error in manager approval: {}", id, e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(createErrorResponse("MANAGER_APPROVAL_ERROR", e.getMessage()));
+        }
+    }
+
+    /**
+     * SUPER_ADMIN ticket'ı final onay verir - CLOSED yapar
+     */
+    @PatchMapping("/{id}/approve-admin")
+    @PreAuthorize("hasRole('SUPER_ADMIN')")
+    public ResponseEntity<?> approveByAdmin(
+            @PathVariable Long id,
+            @RequestBody(required = false) Map<String, String> requestBody,
+            HttpServletRequest request) {
+
+        logger.info("🎯 Admin giving final approval to ticket: {}", id);
+
+        try {
+            String token = extractTokenFromRequest(request);
+            if (token == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(createErrorResponse("UNAUTHORIZED", "Token not found"));
+            }
+
+            Long adminId = jwtUtil.getUserIdFromToken(token);
+            String finalComment = requestBody != null ? requestBody.get("finalComment") : "";
+
+            // SUPER_ADMIN final onayı - CLOSED yapar
+            TicketDetailResponse ticket = ticketService.approveByAdmin(id, finalComment, adminId);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Ticket given final approval and closed");
+            response.put("ticket", ticket);
+            response.put("timestamp", LocalDateTime.now());
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("❌ Error in admin approval: {}", id, e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(createErrorResponse("ADMIN_APPROVAL_ERROR", e.getMessage()));
+        }
+    }
+
+    /**
+     * Onayı reddet - önceki duruma geri döndür
+     */
+    @PatchMapping("/{id}/reject-approval")
+    @PreAuthorize("hasRole('SUPER_ADMIN') or hasRole('MANAGER')")
+    public ResponseEntity<?> rejectApproval(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> requestBody,
+            HttpServletRequest request) {
+
+        logger.info("🎯 Rejecting approval for ticket: {}", id);
+
+        try {
+            String token = extractTokenFromRequest(request);
+            if (token == null) {
+                return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                        .body(createErrorResponse("UNAUTHORIZED", "Token not found"));
+            }
+
+            Long userId = jwtUtil.getUserIdFromToken(token);
+            String rejectionReason = requestBody.get("rejectionReason");
+
+            if (rejectionReason == null || rejectionReason.trim().isEmpty()) {
+                return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                        .body(createErrorResponse("VALIDATION_ERROR", "Rejection reason is required"));
+            }
+
+            // Onayı reddet
+            TicketDetailResponse ticket = ticketService.rejectApproval(id, rejectionReason, userId);
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("message", "Approval rejected");
+            response.put("ticket", ticket);
+            response.put("timestamp", LocalDateTime.now());
+
+            return ResponseEntity.ok(response);
+
+        } catch (Exception e) {
+            logger.error("❌ Error rejecting approval: {}", id, e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(createErrorResponse("REJECT_APPROVAL_ERROR", e.getMessage()));
+        }
     }
 
     /**

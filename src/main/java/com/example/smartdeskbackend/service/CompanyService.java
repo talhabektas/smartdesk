@@ -54,6 +54,11 @@ public interface CompanyService {
     void activateCompany(Long id);
 
     /**
+     * Şirket sil
+     */
+    void deleteCompany(Long id);
+
+    /**
      * Şirketin daha fazla kullanıcı ekleyip ekleyemeyeceğini kontrol et
      */
     boolean canAddMoreUsers(Long companyId);

@@ -10,6 +10,7 @@ import com.example.smartdeskbackend.exception.*;
 import com.example.smartdeskbackend.repository.*;
 import com.example.smartdeskbackend.service.TicketService;
 import com.example.smartdeskbackend.service.FileService;
+import com.example.smartdeskbackend.service.NotificationService;
 import com.example.smartdeskbackend.integration.email.EmailService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,6 +65,9 @@ public class TicketServiceImpl implements TicketService {
     @Autowired
     private EmailService emailService;
 
+    @Autowired
+    private NotificationService notificationService;
+
     // WebSocket Controller enjekte edildi
     @Autowired
     private WebSocketMessageController webSocketMessageController;
@@ -94,6 +98,18 @@ public class TicketServiceImpl implements TicketService {
 
     @Override
     @Transactional(readOnly = true)
+    public Page<TicketResponse> getAllTickets(Pageable pageable) {
+        logger.debug("Getting ALL tickets for SUPER_ADMIN");
+
+        // Ensure proper sorting for SUPER_ADMIN - priority to PENDING_ADMIN and recent tickets
+        Page<Ticket> tickets = ticketRepository.findAllWithCustomSorting(pageable);
+        logger.debug("Found {} total tickets for SUPER_ADMIN", tickets.getTotalElements());
+        
+        return tickets.map(this::mapToResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
     public Page<TicketResponse> getTicketsByCompany(Long companyId, Pageable pageable) {
         logger.debug("Getting tickets by company: {}", companyId);
 
@@ -117,6 +133,43 @@ public class TicketServiceImpl implements TicketService {
 
         Page<Ticket> tickets = ticketRepository.findByAssignedAgentId(agentId, pageable);
         return tickets.map(this::mapToResponse);
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Page<TicketResponse> getTicketsByUserId(Long userId, Pageable pageable) {
+        logger.info("🎫 Getting tickets by userId: {}", userId);
+
+        try {
+            // User varlık kontrolü
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+            if (!user.getRole().equals(UserRole.CUSTOMER)) {
+                throw new BusinessLogicException("User is not a customer");
+            }
+
+            // Bu kullanıcının customer kaydını bul veya oluştur
+            Customer customer = customerRepository.findByEmail(user.getEmail()).orElse(null);
+            
+            if (customer == null) {
+                logger.info("🎫 Customer record not found for user: {}, creating one", user.getEmail());
+                customer = createCustomerFromUser(user);
+            }
+
+            logger.info("🎫 Found customer ID: {} for user ID: {}", customer.getId(), userId);
+
+            // Customer'ın ticket'larını getir
+            Page<Ticket> tickets = ticketRepository.findByCustomerId(customer.getId(), pageable);
+            
+            logger.info("🎫 Found {} tickets for customer ID: {}", tickets.getTotalElements(), customer.getId());
+            
+            return tickets.map(this::mapToResponse);
+
+        } catch (Exception e) {
+            logger.error("❌ Error getting tickets by userId: {}", userId, e);
+            throw new BusinessLogicException("Failed to get tickets by user: " + e.getMessage());
+        }
     }
 
     // ============ ARAMA ve FİLTRELEME ============
@@ -190,7 +243,18 @@ public class TicketServiceImpl implements TicketService {
         Customer customer = null;
         if (request.getCustomerId() != null) {
             customer = customerRepository.findById(request.getCustomerId())
-                    .orElseThrow(() -> new ResourceNotFoundException("Customer not found with id: " + request.getCustomerId()));
+                    .orElse(null);
+            
+            // Eğer customer bulunamadıysa ve creatorUser CUSTOMER role'ündeyse, user bilgilerinden customer oluştur
+            if (customer == null && request.getCreatorUserId() != null) {
+                User creatorUser = userRepository.findById(request.getCreatorUserId()).orElse(null);
+                if (creatorUser != null && "CUSTOMER".equals(creatorUser.getRole().name())) {
+                    logger.info("Creating customer record for CUSTOMER user: {}", creatorUser.getEmail());
+                    customer = createCustomerFromUser(creatorUser);
+                } else {
+                    throw new ResourceNotFoundException("Customer not found with id: " + request.getCustomerId());
+                }
+            }
         }
 
         // Creator user kontrolü (eğer belirtilmişse)
@@ -248,6 +312,20 @@ public class TicketServiceImpl implements TicketService {
             logger.warn("Failed to send ticket creation notification", e);
         }
 
+        // Real-time notification gönder - MANAGER ve AGENT'lara
+        try {
+            String customerName = ticket.getCustomer() != null ? 
+                ticket.getCustomer().getFirstName() + " " + ticket.getCustomer().getLastName() : "Bilinmeyen Müşteri";
+            notificationService.notifyNewTicketCreated(
+                ticket.getId(), 
+                ticket.getCompany().getId(), 
+                ticket.getTicketNumber(), 
+                customerName
+            );
+        } catch (Exception e) {
+            logger.warn("Failed to send ticket creation notifications to users", e);
+        }
+
         logger.info("Ticket created successfully with id: {}", ticket.getId());
         return mapToDetailResponse(ticket);
     }
@@ -282,6 +360,12 @@ public class TicketServiceImpl implements TicketService {
             createHistoryRecord(ticket, "category",
                     oldCategory != null ? oldCategory.getCode() : null,
                     request.getCategory().getCode(), null);
+        }
+
+        if (request.getStatus() != null) {
+            TicketStatus oldStatus = ticket.getStatus();
+            ticket.setStatus(request.getStatus());
+            createHistoryRecord(ticket, "status", oldStatus.getCode(), request.getStatus().getCode(), null);
         }
 
         if (request.getTags() != null) {
@@ -1112,6 +1196,10 @@ public class TicketServiceImpl implements TicketService {
         if (ticket.getCustomer() != null) {
             response.setCustomerName(ticket.getCustomer().getFullName());
             response.setCustomerEmail(ticket.getCustomer().getEmail());
+            // Customer'ın şirket bilgisi
+            if (ticket.getCustomer().getCompany() != null) {
+                response.setCustomerCompanyName(ticket.getCustomer().getCompany().getName());
+            }
         }
 
         // Agent bilgileri
@@ -1272,5 +1360,284 @@ public class TicketServiceImpl implements TicketService {
         }
 
         return response;
+    }
+
+    /**
+     * User bilgilerinden Customer kaydı oluşturur
+     */
+    private Customer createCustomerFromUser(User user) {
+        Customer customer = new Customer();
+        customer.setFirstName(user.getFirstName());
+        customer.setLastName(user.getLastName());
+        customer.setEmail(user.getEmail());
+        customer.setPhone(user.getPhone());
+        customer.setCompany(user.getCompany());
+        customer.setSegment(CustomerSegment.BASIC); // Default segment
+        customer.setIsActive(true);
+        
+        // Customer'ı kaydet
+        customer = customerRepository.save(customer);
+        logger.info("✅ Customer record created: ID={}, Email={}", customer.getId(), customer.getEmail());
+        
+        return customer;
+    }
+
+    // ============ APPROVAL WORKFLOW IMPLEMENTATIONS ============
+
+    @Override
+    @Transactional
+    public TicketDetailResponse resolveTicketForApproval(Long id, String resolutionSummary, Long userId) {
+        logger.info("🎯 Resolving ticket for approval: {} by user: {}", id, userId);
+
+        try {
+            Ticket ticket = ticketRepository.findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("Ticket not found with id: " + id));
+
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+            // Sadece RESOLVED, IN_PROGRESS, OPEN durumundaki ticket'lar çözülebilir
+            if (!List.of(TicketStatus.IN_PROGRESS, TicketStatus.OPEN, TicketStatus.PENDING).contains(ticket.getStatus())) {
+                throw new BusinessLogicException("Ticket cannot be resolved from current status: " + ticket.getStatus());
+            }
+
+            // Önceki durumu kaydet
+            TicketStatus oldStatus = ticket.getStatus();
+
+            // Ticket'ı RESOLVED yap ama MANAGER onayına gönder
+            ticket.setStatus(TicketStatus.PENDING_MANAGER_APPROVAL);
+            ticket.setResolvedAt(LocalDateTime.now());
+            
+            if (resolutionSummary != null && !resolutionSummary.trim().isEmpty()) {
+                // Resolution summary'yi history'ye ekle
+                createHistoryRecord(ticket, "resolution_summary", null, resolutionSummary, user);
+            }
+
+            // Status değişikliğini history'ye ekle
+            createHistoryRecord(ticket, "status", oldStatus.getCode(), 
+                TicketStatus.PENDING_MANAGER_APPROVAL.getCode(), user);
+
+            ticket = ticketRepository.save(ticket);
+
+            // MANAGER'a onay notification'ı gönder
+            try {
+                List<User> managers = userRepository.findByCompanyIdAndRole(ticket.getCompany().getId(), UserRole.MANAGER);
+                if (!managers.isEmpty()) {
+                    User manager = managers.get(0); // İlk manager'ı al
+                    notificationService.notifyPendingApproval(
+                        ticket.getId(), 
+                        "MANAGER", 
+                        manager.getId(), 
+                        ticket.getTicketNumber()
+                    );
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to send manager approval notification: {}", e.getMessage());
+            }
+
+            logger.info("✅ Ticket resolved and sent for manager approval: {}", ticket.getTicketNumber());
+            return mapToDetailResponse(ticket);
+
+        } catch (Exception e) {
+            logger.error("❌ Error resolving ticket for approval: {}", id, e);
+            throw e;
+        }
+    }
+
+    @Override
+    @Transactional
+    public TicketDetailResponse approveByManager(Long id, String approvalComment, Long managerId) {
+        logger.info("🎯 Manager approving ticket: {} by manager: {}", id, managerId);
+
+        try {
+            Ticket ticket = ticketRepository.findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("Ticket not found with id: " + id));
+
+            User manager = userRepository.findById(managerId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Manager not found with id: " + managerId));
+
+            // Sadece PENDING_MANAGER_APPROVAL durumundaki ticket'lar onaylanabilir
+            if (ticket.getStatus() != TicketStatus.PENDING_MANAGER_APPROVAL) {
+                throw new BusinessLogicException("Ticket is not pending manager approval. Current status: " + ticket.getStatus());
+            }
+
+            // Manager approval comment'i ekle
+            if (approvalComment != null && !approvalComment.trim().isEmpty()) {
+                createHistoryRecord(ticket, "manager_approval", null, approvalComment, manager);
+            }
+
+            // Status'u PENDING_ADMIN_APPROVAL'a çevir
+            TicketStatus oldStatus = ticket.getStatus();
+            ticket.setStatus(TicketStatus.PENDING_ADMIN_APPROVAL);
+            
+            createHistoryRecord(ticket, "status", oldStatus.getCode(), 
+                TicketStatus.PENDING_ADMIN_APPROVAL.getCode(), manager);
+
+            ticket = ticketRepository.save(ticket);
+
+            // SUPER_ADMIN'a onay notification'ı gönder (şirket bazlı)
+            try {
+                Long ticketCompanyId = ticket.getCompany().getId();
+                List<User> companyAdmins = userRepository.findByCompanyIdAndRole(ticketCompanyId, UserRole.SUPER_ADMIN);
+                
+                if (companyAdmins.isEmpty()) {
+                    // Şirket bazlı admin bulunamazsa, global SUPER_ADMIN'lere gönder
+                    logger.warn("No SUPER_ADMIN found for company {}, sending to all SUPER_ADMIN users", ticketCompanyId);
+                    List<User> allAdmins = userRepository.findByRole(UserRole.SUPER_ADMIN);
+                    for (User admin : allAdmins) {
+                        logger.info("🔔 Sending admin approval notification to: {}", admin.getEmail());
+                        notificationService.notifyPendingApproval(
+                            ticket.getId(), 
+                            "ADMIN", 
+                            admin.getId(), 
+                            ticket.getTicketNumber()
+                        );
+                    }
+                } else {
+                    // Şirket bazlı admin'lere gönder
+                    for (User admin : companyAdmins) {
+                        logger.info("🔔 Sending admin approval notification to company admin: {}", admin.getEmail());
+                        notificationService.notifyPendingApproval(
+                            ticket.getId(), 
+                            "ADMIN", 
+                            admin.getId(), 
+                            ticket.getTicketNumber()
+                        );
+                    }
+                }
+            } catch (Exception e) {
+                logger.warn("Failed to send admin approval notification: {}", e.getMessage());
+            }
+
+            // Onay tamamlandı notification'ı gönder (ticket creator'a)
+            try {
+                notificationService.notifyApprovalCompleted(
+                    ticket.getId(), 
+                    "MANAGER", 
+                    true, 
+                    ticket.getCreatorUser().getId(), 
+                    ticket.getTicketNumber()
+                );
+            } catch (Exception e) {
+                logger.warn("Failed to send approval completed notification: {}", e.getMessage());
+            }
+
+            logger.info("✅ Ticket approved by manager and sent for admin approval: {}", ticket.getTicketNumber());
+            return mapToDetailResponse(ticket);
+
+        } catch (Exception e) {
+            logger.error("❌ Error in manager approval: {}", id, e);
+            throw e;
+        }
+    }
+
+    @Override
+    @Transactional
+    public TicketDetailResponse approveByAdmin(Long id, String finalComment, Long adminId) {
+        logger.info("🎯 Admin giving final approval to ticket: {} by admin: {}", id, adminId);
+
+        try {
+            Ticket ticket = ticketRepository.findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("Ticket not found with id: " + id));
+
+            User admin = userRepository.findById(adminId)
+                    .orElseThrow(() -> new ResourceNotFoundException("Admin not found with id: " + adminId));
+
+            // Sadece PENDING_ADMIN_APPROVAL durumundaki ticket'lar final onaylanabilir
+            if (ticket.getStatus() != TicketStatus.PENDING_ADMIN_APPROVAL) {
+                throw new BusinessLogicException("Ticket is not pending admin approval. Current status: " + ticket.getStatus());
+            }
+
+            // Final approval comment'i ekle
+            if (finalComment != null && !finalComment.trim().isEmpty()) {
+                createHistoryRecord(ticket, "admin_approval", null, finalComment, admin);
+            }
+
+            // Status'u RESOLVED'a çevir
+            TicketStatus oldStatus = ticket.getStatus();
+            ticket.setStatus(TicketStatus.RESOLVED);
+            ticket.setResolvedAt(LocalDateTime.now());
+            
+            createHistoryRecord(ticket, "status", oldStatus.getCode(), 
+                TicketStatus.RESOLVED.getCode(), admin);
+
+            ticket = ticketRepository.save(ticket);
+
+            // Final onay tamamlandı notification'ı gönder (ticket creator'a)
+            try {
+                notificationService.notifyApprovalCompleted(
+                    ticket.getId(), 
+                    "ADMIN", 
+                    true, 
+                    ticket.getCreatorUser().getId(), 
+                    ticket.getTicketNumber()
+                );
+            } catch (Exception e) {
+                logger.warn("Failed to send final approval notification: {}", e.getMessage());
+            }
+
+            logger.info("✅ Ticket given final approval and resolved: {}", ticket.getTicketNumber());
+            return mapToDetailResponse(ticket);
+
+        } catch (Exception e) {
+            logger.error("❌ Error in admin approval: {}", id, e);
+            throw e;
+        }
+    }
+
+    @Override
+    @Transactional
+    public TicketDetailResponse rejectApproval(Long id, String rejectionReason, Long userId) {
+        logger.info("🎯 Rejecting approval for ticket: {} by user: {}", id, userId);
+
+        try {
+            Ticket ticket = ticketRepository.findById(id)
+                    .orElseThrow(() -> new ResourceNotFoundException("Ticket not found with id: " + id));
+
+            User user = userRepository.findById(userId)
+                    .orElseThrow(() -> new ResourceNotFoundException("User not found with id: " + userId));
+
+            TicketStatus oldStatus = ticket.getStatus();
+            TicketStatus newStatus;
+
+            // Hangi approval aşamasında reddedildiğine göre geri dönüş yap
+            if (oldStatus == TicketStatus.PENDING_MANAGER_APPROVAL) {
+                newStatus = TicketStatus.IN_PROGRESS; // Manager red etti - IN_PROGRESS'e döndür
+            } else if (oldStatus == TicketStatus.PENDING_ADMIN_APPROVAL) {
+                newStatus = TicketStatus.PENDING_MANAGER_APPROVAL; // Admin red etti - Manager onayına döndür
+            } else {
+                throw new BusinessLogicException("Ticket is not in an approval state. Current status: " + oldStatus);
+            }
+
+            // Red sebebini history'ye ekle
+            createHistoryRecord(ticket, "approval_rejection", null, rejectionReason, user);
+
+            // Status'u geri çevir
+            ticket.setStatus(newStatus);
+            createHistoryRecord(ticket, "status", oldStatus.getCode(), newStatus.getCode(), user);
+
+            ticket = ticketRepository.save(ticket);
+
+            // Red notification'ı gönder (ticket creator'a)
+            try {
+                String approvalType = oldStatus == TicketStatus.PENDING_MANAGER_APPROVAL ? "MANAGER" : "ADMIN";
+                notificationService.notifyApprovalCompleted(
+                    ticket.getId(), 
+                    approvalType, 
+                    false, 
+                    ticket.getCreatorUser().getId(), 
+                    ticket.getTicketNumber()
+                );
+            } catch (Exception e) {
+                logger.warn("Failed to send approval rejection notification: {}", e.getMessage());
+            }
+
+            logger.info("✅ Approval rejected for ticket: {} - returned to status: {}", ticket.getTicketNumber(), newStatus);
+            return mapToDetailResponse(ticket);
+
+        } catch (Exception e) {
+            logger.error("❌ Error rejecting approval: {}", id, e);
+            throw e;
+        }
     }
 }

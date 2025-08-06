@@ -214,4 +214,21 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
             "GROUP BY t.category " +
             "ORDER BY COUNT(t) DESC")
     List<Object[]> getMostUsedCategories(@Param("companyId") Long companyId);
+
+    /**
+     * SUPER_ADMIN için tüm ticketlar - özel sıralama ile
+     * PENDING_ADMIN_APPROVAL durumundaki ticketlar en üstte
+     * RESOLVED ticketlar da yüksek öncelik ile gösteriliyor
+     */
+    @Query("SELECT t FROM Ticket t " +
+            "ORDER BY " +
+            "CASE WHEN t.status = com.example.smartdeskbackend.enums.TicketStatus.PENDING_ADMIN_APPROVAL THEN 1 " +
+            "     WHEN t.status = com.example.smartdeskbackend.enums.TicketStatus.PENDING_MANAGER_APPROVAL THEN 2 " +
+            "     WHEN t.status = com.example.smartdeskbackend.enums.TicketStatus.RESOLVED THEN 3 " +
+            "     WHEN t.status = com.example.smartdeskbackend.enums.TicketStatus.NEW THEN 4 " +
+            "     WHEN t.status = com.example.smartdeskbackend.enums.TicketStatus.OPEN THEN 5 " +
+            "     WHEN t.status = com.example.smartdeskbackend.enums.TicketStatus.IN_PROGRESS THEN 6 " +
+            "     ELSE 7 END, " +
+            "t.updatedAt DESC, t.createdAt DESC")
+    Page<Ticket> findAllWithCustomSorting(Pageable pageable);
 }

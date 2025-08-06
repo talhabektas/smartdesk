@@ -21,7 +21,10 @@ export enum TicketStatus {
   PENDING = 'PENDING',
   RESOLVED = 'RESOLVED',
   CLOSED = 'CLOSED',
-  CANCELLED = 'CANCELLED'
+  CANCELLED = 'CANCELLED',
+  PENDING_MANAGER_APPROVAL = 'PENDING_MGR',
+  MANAGER_APPROVED = 'MGR_APPROVED',
+  PENDING_ADMIN_APPROVAL = 'PENDING_ADMIN'
 }
 
 export enum TicketPriority {
@@ -272,8 +275,13 @@ export interface Ticket {
   isInternal: boolean;
   escalationLevel: number;
   customer: Customer;
+  customerName?: string;
+  customerEmail?: string;
+  customerCompanyName?: string;
   assignedAgent?: User;
+  assignedAgentName?: string;
   department: Department;
+  departmentName?: string;
   comments: TicketComment[];
   attachments: TicketAttachment[];
   createdAt: string;

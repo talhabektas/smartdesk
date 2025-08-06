@@ -31,33 +31,35 @@ const ApiTest: React.FC = () => {
   const endpoints = [
     {
       name: 'Test Hello',
-      url: '/v1/test/hello',
+      url: '/test/hello',
       method: 'GET',
       requiresAuth: false,
     },
     {
       name: 'Test Status',
-      url: '/v1/test/status',
+      url: '/test/status',
       method: 'GET',
       requiresAuth: false,
     },
     {
       name: 'Auth Me',
-      url: '/v1/auth/me',
+      url: '/auth/me',
       method: 'GET',
       requiresAuth: true,
     },
     {
       name: 'Actuator Health',
-      url: '/actuator/health',
+      url: 'http://localhost:8067/api/actuator/health',
       method: 'GET',
       requiresAuth: false,
+      directUrl: true,
     },
     {
       name: 'Actuator Mappings',
-      url: '/actuator/mappings',
+      url: 'http://localhost:8067/api/actuator/mappings',
       method: 'GET',
       requiresAuth: false,
+      directUrl: true,
     },
   ];
 
@@ -66,10 +68,32 @@ const ApiTest: React.FC = () => {
     
     try {
       let response;
-      if (endpoint.method === 'GET') {
-        response = await api.get(endpoint.url);
+      
+      if (endpoint.directUrl) {
+        // Actuator endpoint'leri için doğrudan fetch kullan
+        const fetchResponse = await fetch(endpoint.url, {
+          method: endpoint.method,
+          headers: {
+            'Content-Type': 'application/json',
+            ...(endpoint.requiresAuth && {
+              'Authorization': `Bearer ${localStorage.getItem('accessToken')}`
+            })
+          }
+        });
+        
+        if (!fetchResponse.ok) {
+          throw new Error(`HTTP ${fetchResponse.status}: ${fetchResponse.statusText}`);
+        }
+        
+        const data = await fetchResponse.json();
+        response = { data };
       } else {
-        response = await api.post(endpoint.url, {});
+        // Normal API endpoint'leri için api client kullan
+        if (endpoint.method === 'GET') {
+          response = await api.get(endpoint.url);
+        } else {
+          response = await api.post(endpoint.url, {});
+        }
       }
       
       const duration = Date.now() - startTime;

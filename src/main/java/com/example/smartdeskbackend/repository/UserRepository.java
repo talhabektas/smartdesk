@@ -84,6 +84,11 @@ public interface UserRepository extends JpaRepository<User, Long>, JpaSpecificat
     List<User> findByCompanyIdAndRole(Long companyId, UserRole role);
 
     /**
+     * Şirket ve birden fazla role göre kullanıcıları bulma
+     */
+    List<User> findByCompanyIdAndRoleIn(Long companyId, List<UserRole> roles);
+
+    /**
      * Departman ve role göre kullanıcıları bulma
      */
     @Query(value = "SELECT * FROM users u WHERE u.department_id = :departmentId " +
